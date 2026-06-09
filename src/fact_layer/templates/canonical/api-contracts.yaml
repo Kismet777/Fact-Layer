@@ -1,0 +1,40 @@
+# API Contracts — how the project exposes or consumes interfaces
+category: api-contracts
+tier: dynamic
+
+slots:
+  style:
+    value: ""                # e.g. "REST", "gRPC", "GraphQL", "CLI-only"
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: "2026-01-01"
+      verified: "2026-01-01"
+
+  auth-method:
+    value: ""                # e.g. "JWT", "API key", "OAuth2", "none"
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: "2026-01-01"
+      verified: "2026-01-01"
+
+  key-endpoints:
+    value: []                # e.g. ["POST /api/facts", "GET /api/export"]
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: "2026-01-01"
+      verified: "2026-01-01"
+
+  versioning:
+    value: ""                # e.g. "URL path /v1/", "header-based", "none"
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: "2026-01-01"
+      verified: "2026-01-01"

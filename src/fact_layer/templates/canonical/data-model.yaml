@@ -1,0 +1,40 @@
+# Data Model — database and data structure decisions
+category: data-model
+tier: dynamic
+
+slots:
+  database-type:
+    value: ""                # e.g. "PostgreSQL 16", "SQLite", "MongoDB"
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: "2026-01-01"
+      verified: "2026-01-01"
+
+  orm:
+    value: ""                # e.g. "Prisma", "SQLAlchemy", "Drizzle", "none"
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: "2026-01-01"
+      verified: "2026-01-01"
+
+  migration-strategy:
+    value: ""                # e.g. "Alembic auto-generate", "manual SQL", "Prisma migrate"
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: "2026-01-01"
+      verified: "2026-01-01"
+
+  key-entities:
+    value: []                # e.g. ["User", "Project", "FactSlot"]
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: "2026-01-01"
+      verified: "2026-01-01"

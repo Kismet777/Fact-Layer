@@ -1,0 +1,134 @@
+from __future__ import annotations
+
+import importlib.resources
+import json
+import os
+from pathlib import Path
+
+from pydantic import BaseModel
+
+from fact_layer.core.exporter import render_export
+from fact_layer.core.loader import load_all_categories, load_dependencies
+from fact_layer.models.dependency import DependencyGraph
+
+
+class AuditFinding(BaseModel):
+    severity: str
+    type: str
+    slots: list[str] = []
+    description: str
+    suggestion: str = ""
+
+
+class AuditResult(BaseModel):
+    findings: list[AuditFinding] = []
+    summary: str = ""
+    raw_response: str = ""
+    error: str | None = None
+
+
+def _load_prompt_template() -> str:
+    tmpl_path = Path(str(importlib.resources.files("fact_layer") / "templates" / "audit_prompt.txt"))
+    return tmpl_path.read_text(encoding="utf-8")
+
+
+def _format_dependency_graph(graph: DependencyGraph) -> str:
+    if not graph.static:
+        return "No dependency rules defined."
+    lines = []
+    for rule in graph.static:
+        for t in rule.targets:
+            lines.append(f"- {rule.source} --[{t.type}]--> {t.slot}")
+    return "\n".join(lines)
+
+
+def _format_decisions(categories: dict) -> str:
+    dec_cat = categories.get("decisions")
+    if not dec_cat or not dec_cat.slots:
+        return "No active decisions."
+    lines = []
+    for slot_id, sv in dec_cat.slots.items():
+        if sv.meta.status not in ("active", "uncertain"):
+            continue
+        raw = sv.value
+        if not isinstance(raw, dict) or raw.get("status") != "active":
+            continue
+        title = raw.get("title", slot_id)
+        affected = raw.get("affected-slots", [])
+        rationale = raw.get("rationale", "")
+        lines.append(f"- {slot_id.upper()}: {title}")
+        if rationale:
+            lines.append(f"  Rationale: {rationale}")
+        if affected:
+            lines.append(f"  Affects: {', '.join(affected)}")
+    return "\n".join(lines) if lines else "No active decisions."
+
+
+def build_audit_prompt(facts_dir: Path) -> str:
+    facts_md = render_export(facts_dir)
+    graph = load_dependencies(facts_dir)
+    categories = load_all_categories(facts_dir)
+
+    template = _load_prompt_template()
+    return template.format(
+        facts_markdown=facts_md,
+        dependency_graph=_format_dependency_graph(graph),
+        decisions=_format_decisions(categories),
+    )
+
+
+def estimate_tokens(text: str) -> int:
+    return len(text) // 4
+
+
+def run_audit(
+    facts_dir: Path,
+    model: str = "claude-sonnet-4-6",
+    api_key: str | None = None,
+) -> AuditResult:
+    key = api_key or os.environ.get("ANTHROPIC_API_KEY")
+    if not key:
+        return AuditResult(
+            error="ANTHROPIC_API_KEY not set. Export it or pass --api-key.",
+        )
+
+    prompt = build_audit_prompt(facts_dir)
+
+    try:
+        import anthropic
+
+        client = anthropic.Anthropic(api_key=key)
+        response = client.messages.create(
+            model=model,
+            max_tokens=2048,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        raw = response.content[0].text
+    except Exception as e:
+        return AuditResult(error=f"API call failed: {e}", raw_response="")
+
+    return _parse_response(raw)
+
+
+def _parse_response(raw: str) -> AuditResult:
+    raw = raw.strip()
+    if raw.startswith("```"):
+        lines = raw.split("\n")
+        lines = [l for l in lines if not l.startswith("```")]
+        raw = "\n".join(lines).strip()
+
+    try:
+        data = json.loads(raw)
+        findings = [AuditFinding(**f) for f in data.get("findings", [])]
+        return AuditResult(
+            findings=findings,
+            summary=data.get("summary", ""),
+            raw_response=raw,
+        )
+    except (json.JSONDecodeError, Exception):
+        return AuditResult(
+            findings=[],
+            summary="",
+            raw_response=raw,
+            error="Could not parse LLM response as JSON. Raw response shown below.",
+        )

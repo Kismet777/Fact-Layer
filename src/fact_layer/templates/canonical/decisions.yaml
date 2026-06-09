@@ -1,0 +1,27 @@
+# Decisions — cross-cutting decisions that affect multiple categories
+category: decisions
+tier: working
+
+slots:
+  # Each decision is a slot. Use IDs like "dec-001", "dec-002", etc.
+  # Example:
+  # dec-001:
+  #   value:
+  #     title: "Choose PostgreSQL over MySQL"
+  #     date: "2026-06-07"
+  #     status: "active"        # active | superseded | reverted
+  #     rationale: "Need JSONB support and better CTE performance"
+  #     affected-slots:
+  #       - tech-stack.database
+  #       - data-model.database-type
+  #       - build-deploy.docker
+  #     alternatives-considered:
+  #       - "MySQL 8 — lacks native JSONB"
+  #       - "SQLite — insufficient for concurrent access"
+  #   meta:
+  #     source: human
+  #     confidence: high
+  #     status: active
+  #     updated: "2026-06-07"
+  #     verified: "2026-06-07"
+  {}

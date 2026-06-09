@@ -1,0 +1,49 @@
+# Project Overview — who, what, why
+category: project-overview
+tier: stable
+
+slots:
+  name:
+    value: ""                # e.g. "my-awesome-app"
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: "2026-01-01"
+      verified: "2026-01-01"
+
+  purpose:
+    value: ""                # One sentence: what problem does this project solve?
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: "2026-01-01"
+      verified: "2026-01-01"
+
+  stage:
+    value: ""                # e.g. "planning", "active-development", "maintenance", "sunset"
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: "2026-01-01"
+      verified: "2026-01-01"
+
+  scope-in:
+    value: []                # What this project IS responsible for
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: "2026-01-01"
+      verified: "2026-01-01"
+
+  scope-out:
+    value: []                # What this project is explicitly NOT responsible for
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: "2026-01-01"
+      verified: "2026-01-01"

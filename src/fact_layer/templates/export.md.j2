@@ -1,0 +1,27 @@
+# Project Facts Snapshot
+Generated: {{ generated_at }}
+
+{% for section in sections %}
+{% if section.tier == "dynamic" and loop.first or (loop.previtem is defined and loop.previtem.tier != "dynamic" and section.tier == "dynamic") %}
+---
+
+{% endif %}
+## {{ section.title }}
+{% if section.is_decisions %}
+{% for dec in section.decisions %}
+- {{ dec.id }} ({{ dec.date }}, {{ dec.status }}): {{ dec.title }}{% if dec.rationale %} — {{ dec.rationale }}{% endif %}
+
+{% endfor %}
+{% else %}
+{% for slot in section.slots %}
+{% if slot.is_list %}
+**{{ slot.name }}:**
+{{ slot.value }}
+{% else %}
+**{{ slot.name }}:** {{ slot.value }}{% if slot.reason is defined %} — "{{ slot.reason }}"{% endif %}
+
+{% endif %}
+{% endfor %}
+{% endif %}
+
+{% endfor %}

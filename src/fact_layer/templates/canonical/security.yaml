@@ -1,0 +1,40 @@
+# Security — authentication, authorization, and security constraints
+category: security
+tier: dynamic
+
+slots:
+  auth-system:
+    value: ""                # e.g. "JWT + refresh token", "session-based", "API key"
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: "2026-01-01"
+      verified: "2026-01-01"
+
+  authorization:
+    value: ""                # e.g. "RBAC", "ABAC", "simple owner check", "none"
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: "2026-01-01"
+      verified: "2026-01-01"
+
+  secrets-management:
+    value: ""                # e.g. "env vars via .env", "AWS Secrets Manager", "Vault"
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: "2026-01-01"
+      verified: "2026-01-01"
+
+  known-constraints:
+    value: []                # e.g. ["no PII in logs", "GDPR compliance required"]
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: "2026-01-01"
+      verified: "2026-01-01"

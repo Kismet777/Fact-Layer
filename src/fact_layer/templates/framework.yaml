@@ -1,0 +1,81 @@
+# fact-layer framework configuration
+version: 1
+project_name: ""
+
+tiers:
+  stable:
+    description: "Low-frequency changes, high authority"
+    stale_threshold_days: 90
+  dynamic:
+    description: "Mid-frequency changes, evolves with the project"
+    stale_threshold_days: 30
+  working:
+    description: "High-frequency changes, current work state"
+    stale_threshold_days: 7
+
+# Core categories — always enabled
+core:
+  project-overview:
+    file: project-overview.yaml
+    tier: stable
+    required_slots:
+      - name
+      - purpose
+      - stage
+  tech-stack:
+    file: tech-stack.yaml
+    tier: stable
+    required_slots:
+      - language
+  architecture:
+    file: architecture.yaml
+    tier: stable
+    required_slots:
+      - style
+  conventions:
+    file: conventions.yaml
+    tier: stable
+    required_slots: []
+  work-in-progress:
+    file: work-in-progress.yaml
+    tier: working
+    required_slots: []
+
+# Extension categories — enable based on project needs
+extensions:
+  enabled: []
+  available:
+    data-model:
+      file: data-model.yaml
+      tier: dynamic
+      required_slots:
+        - database-type
+    api-contracts:
+      file: api-contracts.yaml
+      tier: dynamic
+      required_slots:
+        - style
+    testing:
+      file: testing.yaml
+      tier: dynamic
+      required_slots:
+        - framework
+    build-deploy:
+      file: build-deploy.yaml
+      tier: dynamic
+      required_slots:
+        - build-tool
+    security:
+      file: security.yaml
+      tier: dynamic
+      required_slots: []
+
+# Optional categories — enabled by default but can be removed
+optional:
+  enabled:
+    - decisions
+  available:
+    decisions:
+      file: decisions.yaml
+      tier: working
+      required_slots: []

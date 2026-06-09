@@ -1,0 +1,40 @@
+# Architecture — structural decisions
+category: architecture
+tier: stable
+
+slots:
+  style:
+    value: ""                # e.g. "monolith", "microservices", "modular-monolith", "cli-tool"
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: "2026-01-01"
+      verified: "2026-01-01"
+
+  layers:
+    value: []                # e.g. ["cli", "core", "models", "templates"]
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: "2026-01-01"
+      verified: "2026-01-01"
+
+  key-patterns:
+    value: []                # e.g. ["repository pattern", "event sourcing", "CQRS"]
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: "2026-01-01"
+      verified: "2026-01-01"
+
+  cross-service-contracts:
+    value: []                # External systems this project depends on or provides to
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: "2026-01-01"
+      verified: "2026-01-01"
