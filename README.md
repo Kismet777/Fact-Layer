@@ -1,5 +1,7 @@
 # fact-layer
 
+[中文文档](README_CN.md)
+
 **Structured, consistency-checked project facts for AI coding agents.**
 
 > Prevent inconsistency at the source through structure, rather than detect it downstream.
