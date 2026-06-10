@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from fact_layer.core.exporter import render_export
 from fact_layer.core.loader import load_all_categories, load_dependencies
 from fact_layer.models.dependency import DependencyGraph
+from fact_layer.models.slot import ACTIVE_STATUSES
 
 
 class AuditFinding(BaseModel):
@@ -48,7 +49,7 @@ def _format_decisions(categories: dict) -> str:
         return "No active decisions."
     lines = []
     for slot_id, sv in dec_cat.slots.items():
-        if sv.meta.status not in ("active", "uncertain"):
+        if sv.meta.status not in ACTIVE_STATUSES:
             continue
         raw = sv.value
         if not isinstance(raw, dict) or raw.get("status") != "active":
@@ -119,16 +120,23 @@ def _parse_response(raw: str) -> AuditResult:
 
     try:
         data = json.loads(raw)
-        findings = [AuditFinding(**f) for f in data.get("findings", [])]
-        return AuditResult(
-            findings=findings,
-            summary=data.get("summary", ""),
-            raw_response=raw,
-        )
-    except (json.JSONDecodeError, Exception):
+    except json.JSONDecodeError:
         return AuditResult(
             findings=[],
             summary="",
             raw_response=raw,
             error="Could not parse LLM response as JSON. Raw response shown below.",
         )
+
+    findings: list[AuditFinding] = []
+    for f in data.get("findings", []):
+        try:
+            findings.append(AuditFinding(**f))
+        except Exception:
+            continue
+
+    return AuditResult(
+        findings=findings,
+        summary=data.get("summary", ""),
+        raw_response=raw,
+    )

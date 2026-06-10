@@ -288,7 +288,6 @@ def audit(
     console.print(f"  Input: ~{token_est} tokens, model: {model}\n")
 
     if not yes:
-        from rich.prompt import Confirm
         if not Confirm.ask("Proceed?", default=True):
             raise typer.Exit(0)
 

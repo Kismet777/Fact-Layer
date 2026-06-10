@@ -33,8 +33,8 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/nokismet/fact-layer"
-Source = "https://github.com/nokismet/fact-layer"
+Homepage = "https://github.com/Kismet777/Fact-Layer"
+Source = "https://github.com/Kismet777/Fact-Layer"
 
 [project.optional-dependencies]
 dev = [

@@ -7,6 +7,7 @@ from pydantic import BaseModel
 from fact_layer.core.loader import load_all_categories, load_dependencies, load_framework
 from fact_layer.core.registry import get_enabled_categories
 from fact_layer.models.dependency import DependencyGraph
+from fact_layer.models.slot import ACTIVE_STATUSES
 
 
 class ImpactTarget(BaseModel):
@@ -62,7 +63,7 @@ def compute_impact(facts_dir: Path, slot_ref: str) -> ImpactResult:
     dec_cat = categories.get("decisions")
     if dec_cat and "decisions" in enabled_cats:
         for slot_id, sv in dec_cat.slots.items():
-            if sv.meta.status not in ("active", "uncertain"):
+            if sv.meta.status not in ACTIVE_STATUSES:
                 continue
             raw = sv.value
             if not isinstance(raw, dict) or raw.get("status") != "active":

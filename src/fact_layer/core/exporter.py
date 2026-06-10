@@ -10,6 +10,7 @@ from jinja2 import Environment, FileSystemLoader
 from fact_layer.core.loader import load_all_categories, load_framework
 from fact_layer.core.registry import get_enabled_categories
 from fact_layer.models.category import CategoryFile
+from fact_layer.models.slot import ACTIVE_STATUSES, is_empty_value
 
 
 CATEGORY_TITLES = {
@@ -61,10 +62,10 @@ def _extract_active_slots(cat: CategoryFile) -> list[dict]:
     """Extract only active slots with non-empty values."""
     result = []
     for slot_id, slot_val in cat.slots.items():
-        if slot_val.meta.status not in ("active", "uncertain"):
+        if slot_val.meta.status not in ACTIVE_STATUSES:
             continue
         raw = slot_val.value
-        if raw is None or raw == "" or raw == []:
+        if is_empty_value(raw):
             continue
         formatted = _format_value(raw)
         if not formatted:
@@ -84,7 +85,7 @@ def _extract_decisions(cat: CategoryFile, max_count: int = 10) -> list[dict]:
     """Extract active decisions in a compact format."""
     decisions = []
     for slot_id, slot_val in cat.slots.items():
-        if slot_val.meta.status not in ("active", "uncertain"):
+        if slot_val.meta.status not in ACTIVE_STATUSES:
             continue
         raw = slot_val.value
         if not raw or not isinstance(raw, dict):

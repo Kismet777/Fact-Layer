@@ -9,6 +9,7 @@ from fact_layer.core.loader import load_all_categories, load_framework
 from fact_layer.core.registry import get_enabled_categories, get_stale_threshold
 from fact_layer.models.category import CategoryFile
 from fact_layer.models.framework import CategoryDef, FrameworkConfig
+from fact_layer.models.slot import ACTIVE_STATUSES, is_empty_value
 
 
 class CategoryStatus(BaseModel):
@@ -60,7 +61,7 @@ def compute_status(facts_dir: Path, today: date | None = None) -> FactsStatus:
         if cat_name == "decisions":
             active_decisions = sum(
                 1 for sv in cat.slots.values()
-                if sv.meta.status in ("active", "uncertain")
+                if sv.meta.status in ACTIVE_STATUSES
                 and isinstance(sv.value, dict)
                 and sv.value.get("status") == "active"
             )
@@ -84,9 +85,9 @@ def compute_status(facts_dir: Path, today: date | None = None) -> FactsStatus:
         threshold = get_stale_threshold(config, cat_def.tier)
 
         for slot_id, sv in cat.slots.items():
-            if sv.meta.status not in ("active", "uncertain"):
+            if sv.meta.status not in ACTIVE_STATUSES:
                 continue
-            if sv.value is not None and sv.value != "" and sv.value != []:
+            if not is_empty_value(sv.value):
                 filled += 1
             if threshold and (today - sv.meta.verified).days > threshold:
                 stale_count += 1
@@ -101,7 +102,7 @@ def compute_status(facts_dir: Path, today: date | None = None) -> FactsStatus:
                 has_required_missing = True
                 break
             sv = cat.slots[req]
-            if sv.value is None or sv.value == "" or sv.value == []:
+            if is_empty_value(sv.value):
                 has_required_missing = True
                 break
 

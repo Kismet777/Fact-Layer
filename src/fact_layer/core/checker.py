@@ -11,6 +11,7 @@ from fact_layer.core.registry import get_enabled_categories, get_stale_threshold
 from fact_layer.models.category import CategoryFile
 from fact_layer.models.dependency import DependencyGraph
 from fact_layer.models.framework import FrameworkConfig
+from fact_layer.models.slot import ACTIVE_STATUSES, is_empty_value
 
 
 class Severity(str, Enum):
@@ -67,8 +68,8 @@ def _check_structural(
         cat = categories[cat_name]
         active_slots = {
             k: v for k, v in cat.slots.items()
-            if v.meta.status in ("active", "uncertain")
-            and v.value is not None and v.value != "" and v.value != []
+            if v.meta.status in ACTIVE_STATUSES
+            and not is_empty_value(v.value)
         }
 
         if not active_slots:
@@ -91,7 +92,7 @@ def _check_structural(
                 ))
             else:
                 sv = cat.slots[req_slot]
-                if sv.value is None or sv.value == "" or sv.value == []:
+                if is_empty_value(sv.value):
                     issues.append(CheckIssue(
                         category_name=cat_name,
                         check_type="structural",
@@ -124,9 +125,9 @@ def _check_staleness(
             continue
 
         for slot_id, sv in cat.slots.items():
-            if sv.meta.status not in ("active", "uncertain"):
+            if sv.meta.status not in ACTIVE_STATUSES:
                 continue
-            if sv.value is None or sv.value == "" or sv.value == []:
+            if is_empty_value(sv.value):
                 continue
             days_since = (today - sv.meta.verified).days
             if days_since > threshold_days:
@@ -218,7 +219,7 @@ def _check_decisions(
 
     dec_cat = categories["decisions"]
     for slot_id, sv in dec_cat.slots.items():
-        if sv.meta.status not in ("active", "uncertain"):
+        if sv.meta.status not in ACTIVE_STATUSES:
             continue
         raw = sv.value
         if not isinstance(raw, dict):
