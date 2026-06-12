@@ -30,6 +30,7 @@ dependencies = [
     "ruamel.yaml>=0.18",
     "anthropic>=0.30",
     "jinja2>=3.1",
+    "fastmcp>=2.0",
 ]
 
 [project.urls]
@@ -44,6 +45,7 @@ dev = [
 
 [project.scripts]
 fl = "fact_layer.cli:app"
+fl-mcp = "fact_layer.mcp_server:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/fact_layer"]
