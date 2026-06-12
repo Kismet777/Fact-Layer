@@ -391,6 +391,136 @@ def deprecate(
 
 
 @app.command()
+def scan(
+    paths: Annotated[
+        Optional[list[str]],
+        typer.Argument(help="Files or directories to scan (default: auto-discover)"),
+    ] = None,
+    category: Annotated[
+        Optional[str],
+        typer.Option("--category", "-c", help="Only extract for specific categories (comma-separated)"),
+    ] = None,
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Show candidates without interactive review"),
+    ] = False,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Output raw JSON (for programmatic use)"),
+    ] = False,
+    yes: Annotated[
+        bool,
+        typer.Option("--yes", "-y", help="Auto-accept all candidates"),
+    ] = False,
+) -> None:
+    """Scan project files to extract facts for .facts/ slots.
+
+    Reads config files (pyproject.toml, Dockerfile, docker-compose, package.json, CI)
+    and proposes candidate facts. Review and accept to populate your fact layer.
+    """
+    import json as json_mod
+
+    from fact_layer.core.registry import resolve_facts_dir
+    from fact_layer.core.scanner.pipeline import run_scan
+
+    facts_dir = resolve_facts_dir()
+    if not facts_dir:
+        console.print("[red]No .facts/ directory found. Run 'fl init' first.[/red]")
+        raise typer.Exit(1)
+
+    project_root = facts_dir.parent
+    categories = [c.strip() for c in category.split(",")] if category else None
+
+    result = run_scan(
+        project_root=project_root,
+        paths=paths or None,
+        categories=categories,
+    )
+
+    if json_output:
+        print(json_mod.dumps(result.model_dump(mode="json"), indent=2, ensure_ascii=False))
+        raise typer.Exit(0)
+
+    # --- Summary header ---
+    console.print(f"[bold]Scan complete:[/bold] {result.stats.files_scanned} files scanned\n")
+
+    if not result.candidates and not result.conflicts:
+        console.print("  No candidates found.")
+        raise typer.Exit(0)
+
+    # --- Display candidates grouped by category ---
+    if result.candidates:
+        by_category: dict[str, list] = {}
+        for c in result.candidates:
+            by_category.setdefault(c.category, []).append(c)
+
+        for cat_name, candidates in sorted(by_category.items()):
+            console.print(f"  [bold]{cat_name}[/bold]")
+            for c in candidates:
+                console.print(f"    {c.slot:<25} = {c.value}")
+                console.print(f"    [dim]source: {c.source}  evidence: {c.evidence}[/dim]")
+            console.print()
+
+    # --- Display conflicts ---
+    if result.conflicts:
+        console.print(f"  [bold yellow]Conflicts ({len(result.conflicts)}):[/bold yellow]")
+        for cg in result.conflicts:
+            console.print(f"    [yellow]{cg.slot_ref}[/yellow]")
+            for c in cg.candidates:
+                console.print(f"      {c.value:<30} [dim]({c.source})[/dim]")
+        console.print()
+
+    console.print(
+        f"  [bold]Summary: {result.stats.candidates_found} candidates"
+        f" · {result.stats.conflicts} conflicts[/bold]"
+    )
+
+    if dry_run:
+        return
+
+    # --- Batch review by category ---
+    from fact_layer.core.editor import set_slot
+
+    applied = 0
+    skipped = 0
+
+    by_category = {}
+    for c in result.candidates:
+        by_category.setdefault(c.category, []).append(c)
+
+    for cat_name, candidates in sorted(by_category.items()):
+        console.print(f"\n  [bold]Review: {cat_name}[/bold]")
+        for idx, c in enumerate(candidates, 1):
+            console.print(f"  [{idx}/{len(candidates)}] {c.slot_ref}")
+            console.print(f"    Value:    [green]{c.value}[/green]")
+            console.print(f"    Source:   {c.source}")
+            console.print(f"    Evidence: {c.evidence}")
+
+            if yes:
+                action = "y"
+            else:
+                action = Prompt.ask(
+                    "    [Y] accept  [n] skip",
+                    choices=["y", "n"],
+                    default="y",
+                )
+
+            if action == "y":
+                try:
+                    set_slot(facts_dir, c.slot_ref, c.value)
+                    console.print(f"    [green]Applied.[/green]\n")
+                    applied += 1
+                except (ValueError, KeyError) as e:
+                    console.print(f"    [red]Failed: {e}[/red]\n")
+                    skipped += 1
+            else:
+                console.print(f"    [dim]Skipped.[/dim]\n")
+                skipped += 1
+
+    console.print(f"\n  [bold]Done: {applied} applied, {skipped} skipped.[/bold]")
+
+
+@app.command()
 def suggest(
     model: Annotated[
         str,
