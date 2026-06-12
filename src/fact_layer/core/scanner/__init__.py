@@ -6,6 +6,7 @@ from fact_layer.core.scanner.candidates import (
     SlotCandidate,
     UnmappedFact,
 )
+from fact_layer.core.scanner.dedup import deduplicate
 
 __all__ = [
     "ConflictGroup",
@@ -13,4 +14,5 @@ __all__ = [
     "ScanStats",
     "SlotCandidate",
     "UnmappedFact",
+    "deduplicate",
 ]
