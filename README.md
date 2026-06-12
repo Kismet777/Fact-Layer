@@ -165,7 +165,35 @@ fl export -o ctx.md    # custom output path
 
 Generates a clean markdown snapshot — only active slots, no noise. Paste into CLAUDE.md or feed to any coding agent.
 
-### 7. LLM-powered semantic audit
+### 7. Modify facts
+
+```bash
+fl set tech-stack.database "MySQL 8" --reason "Migration from PostgreSQL"
+fl add tech-stack orm "SQLAlchemy 2.0"
+fl deprecate tech-stack.legacy-db
+```
+
+`fl set` updates a slot value with automatic metadata refresh, runs consistency checks, and shows downstream impact. `fl add` creates a new slot. `fl deprecate` marks a slot as superseded (soft-delete).
+
+### 8. LLM-powered suggestions
+
+```bash
+fl suggest                # Interactive review of LLM-generated fixes
+fl suggest --dry-run      # Preview without applying
+fl suggest --yes          # Auto-accept all
+```
+
+Analyzes issues found by `fl check` and generates concrete fix suggestions via Claude. Each suggestion goes through interactive Y/e/n review.
+
+### 9. Export with token budget
+
+```bash
+fl export --budget 2000   # Smart truncation to fit token limit
+```
+
+Prioritizes slots by dependency in-degree, tier importance, required status, and recency. Ideal for context-window-constrained agents.
+
+### 10. LLM-powered semantic audit
 
 ```bash
 fl audit
@@ -188,6 +216,78 @@ Running LLM-powered consistency audit...
      -> Consider filling external-services for completeness
 
   2 warnings, 1 suggestion
+```
+
+### 11. Audit with auto-fix
+
+```bash
+fl audit --fix            # Interactively apply fixes from audit findings
+fl audit --fix --yes      # Auto-accept all fixes
+```
+
+When audit findings include concrete fix suggestions, `--fix` lets you review and apply them one by one.
+
+## MCP Server
+
+fact-layer ships an MCP server so AI agents can query project facts on-demand via the [Model Context Protocol](https://modelcontextprotocol.io/), without reading the full snapshot.
+
+### Setup
+
+Add to your Claude Code MCP config (`.claude/settings.json`):
+
+```json
+{
+  "mcpServers": {
+    "fact-layer": {
+      "command": "fl-mcp",
+      "args": []
+    }
+  }
+}
+```
+
+Or for Cursor (`.cursor/mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "fact-layer": {
+      "command": "fl-mcp",
+      "args": []
+    }
+  }
+}
+```
+
+### Available Tools
+
+| Tool | Description | Example |
+|------|-------------|---------|
+| `facts_get` | Get a single slot's value and metadata | `facts_get(slot="tech-stack.database")` |
+| `facts_list` | List all active slots in a category | `facts_list(category="tech-stack")` |
+| `facts_check` | Run consistency checks | `facts_check()` or `facts_check(category="tech-stack")` |
+| `facts_impact` | Analyze downstream impact of a slot | `facts_impact(slot="tech-stack.database")` |
+| `facts_status` | Health overview of all categories | `facts_status()` |
+| `facts_export` | Export facts as markdown | `facts_export()` or `facts_export(budget=2000)` |
+
+### Example: Agent queries a fact
+
+```
+Agent: What database does this project use?
+→ calls facts_get(slot="tech-stack.database")
+← {"slot": "tech-stack.database", "value": "PostgreSQL 16", "meta": {"source": "human", "confidence": "high", "status": "active", ...}}
+```
+
+### Example: Agent checks consistency before making changes
+
+```
+Agent: Before modifying the database config, let me check for issues.
+→ calls facts_check(category="tech-stack")
+← {"errors": [], "warnings": [], "has_errors": false}
+
+Agent: What will be affected if I change the database?
+→ calls facts_impact(slot="tech-stack.database")
+← {"targets": [{"slot": "data-model.database-type", "relation_type": "derives-from", "is_strong": true}], ...}
 ```
 
 ## Dependency Graph
@@ -245,7 +345,7 @@ optional:
 git clone https://github.com/Kismet777/Fact-Layer.git
 cd fact-layer
 pip install -e ".[dev]"
-pytest                  # 95 tests
+pytest                  # 165 tests
 ```
 
 ## Tech Stack
@@ -256,6 +356,7 @@ pytest                  # 95 tests
 - [ruamel.yaml](https://yaml.readthedocs.io/) — YAML read/write preserving comments
 - [Anthropic SDK](https://docs.anthropic.com/) — LLM-powered audit
 - [Jinja2](https://jinja.palletsprojects.com/) — export template rendering
+- [FastMCP](https://gofastmcp.com/) — MCP server for agent integration
 
 ## License
 

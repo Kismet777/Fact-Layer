@@ -165,7 +165,35 @@ fl export -o ctx.md    # 自定义输出路径
 
 生成干净的 Markdown 快照 —— 只包含活跃槽位，无噪音。可直接粘贴到 CLAUDE.md 或喂给任何编程 Agent。
 
-### 7. LLM 语义审计
+### 7. 修改事实
+
+```bash
+fl set tech-stack.database "MySQL 8" --reason "从 PostgreSQL 迁移"
+fl add tech-stack orm "SQLAlchemy 2.0"
+fl deprecate tech-stack.legacy-db
+```
+
+`fl set` 更新槽位值并自动刷新元数据、运行一致性检查、展示下游影响。`fl add` 新增槽位。`fl deprecate` 标记槽位为已废弃（软删除）。
+
+### 8. LLM 智能修复建议
+
+```bash
+fl suggest                # 交互式审查 LLM 生成的修复
+fl suggest --dry-run      # 预览但不应用
+fl suggest --yes          # 自动接受全部
+```
+
+分析 `fl check` 发现的问题，通过 Claude 生成具体修复建议。每条建议通过交互式 Y/e/n 确认。
+
+### 9. 带预算的智能导出
+
+```bash
+fl export --budget 2000   # 按优先级智能裁剪以适应 token 限制
+```
+
+按依赖入度、层级重要性、必填状态和更新时间排序。适合上下文窗口有限的 Agent。
+
+### 10. LLM 语义审计
 
 ```bash
 fl audit
@@ -188,6 +216,78 @@ Running LLM-powered consistency audit...
      -> Consider filling external-services for completeness
 
   2 warnings, 1 suggestion
+```
+
+### 11. 审计自动修复
+
+```bash
+fl audit --fix            # 交互式应用审计发现的修复
+fl audit --fix --yes      # 自动接受全部修复
+```
+
+当审计发现包含具体修复建议时，`--fix` 让你逐条审查并应用。
+
+## MCP Server
+
+fact-layer 内置了 MCP Server，让 AI Agent 可以通过 [Model Context Protocol](https://modelcontextprotocol.io/) 按需查询项目事实，无需读取完整快照。
+
+### 配置
+
+添加到 Claude Code 的 MCP 配置（`.claude/settings.json`）：
+
+```json
+{
+  "mcpServers": {
+    "fact-layer": {
+      "command": "fl-mcp",
+      "args": []
+    }
+  }
+}
+```
+
+或 Cursor（`.cursor/mcp.json`）：
+
+```json
+{
+  "mcpServers": {
+    "fact-layer": {
+      "command": "fl-mcp",
+      "args": []
+    }
+  }
+}
+```
+
+### 可用工具
+
+| 工具 | 功能 | 示例 |
+|------|------|------|
+| `facts_get` | 获取单个槽位的值和元数据 | `facts_get(slot="tech-stack.database")` |
+| `facts_list` | 列出某类别下所有活跃槽位 | `facts_list(category="tech-stack")` |
+| `facts_check` | 运行一致性检查 | `facts_check()` 或 `facts_check(category="tech-stack")` |
+| `facts_impact` | 分析槽位变更的下游影响 | `facts_impact(slot="tech-stack.database")` |
+| `facts_status` | 所有类别的健康度概览 | `facts_status()` |
+| `facts_export` | 导出事实为 Markdown | `facts_export()` 或 `facts_export(budget=2000)` |
+
+### 示例：Agent 查询事实
+
+```
+Agent: 这个项目用什么数据库？
+→ 调用 facts_get(slot="tech-stack.database")
+← {"slot": "tech-stack.database", "value": "PostgreSQL 16", "meta": {"source": "human", "confidence": "high", "status": "active", ...}}
+```
+
+### 示例：Agent 变更前检查一致性
+
+```
+Agent: 修改数据库配置前，先检查是否有问题。
+→ 调用 facts_check(category="tech-stack")
+← {"errors": [], "warnings": [], "has_errors": false}
+
+Agent: 如果改了数据库会影响什么？
+→ 调用 facts_impact(slot="tech-stack.database")
+← {"targets": [{"slot": "data-model.database-type", "relation_type": "derives-from", "is_strong": true}], ...}
 ```
 
 ## 依赖图
@@ -245,7 +345,7 @@ optional:
 git clone https://github.com/Kismet777/Fact-Layer.git
 cd fact-layer
 pip install -e ".[dev]"
-pytest                  # 95 tests
+pytest                  # 165 tests
 ```
 
 ## 技术栈
@@ -256,6 +356,7 @@ pytest                  # 95 tests
 - [ruamel.yaml](https://yaml.readthedocs.io/) — YAML 读写（保留注释）
 - [Anthropic SDK](https://docs.anthropic.com/) — LLM 审计
 - [Jinja2](https://jinja.palletsprojects.com/) — 导出模板渲染
+- [FastMCP](https://gofastmcp.com/) — MCP Server，Agent 集成
 
 ## 许可证
 
