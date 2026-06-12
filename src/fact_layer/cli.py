@@ -242,9 +242,13 @@ def export(
         bool,
         typer.Option("--stdout", help="Print to stdout instead of file"),
     ] = False,
+    budget: Annotated[
+        Optional[int],
+        typer.Option("--budget", "-b", help="Max token budget for smart truncation"),
+    ] = None,
 ) -> None:
     """Export all canonical facts as a single markdown snapshot for agent consumption."""
-    from fact_layer.core.exporter import render_export
+    from fact_layer.core.exporter import render_export, render_export_budgeted
     from fact_layer.core.registry import resolve_facts_dir
 
     facts_dir = resolve_facts_dir()
@@ -252,7 +256,10 @@ def export(
         console.print("[red]No .facts/ directory found. Run 'fl init' first.[/red]")
         raise typer.Exit(1)
 
-    md = render_export(facts_dir)
+    if budget is not None:
+        md = render_export_budgeted(facts_dir, budget_tokens=budget)
+    else:
+        md = render_export(facts_dir)
 
     if stdout:
         print(md)
@@ -260,6 +267,229 @@ def export(
         out_path = Path(output) if output else facts_dir / "snapshot.md"
         out_path.write_text(md, encoding="utf-8")
         console.print(f"[green]Exported to {out_path}[/green]")
+
+
+@app.command(name="set")
+def set_cmd(
+    slot: Annotated[str, typer.Argument(help="Slot to modify, e.g. tech-stack.database")],
+    value: Annotated[str, typer.Argument(help="New value (string, or JSON for lists/dicts)")],
+    reason: Annotated[
+        Optional[str],
+        typer.Option("--reason", "-r", help="Reason for the change"),
+    ] = None,
+    json_mode: Annotated[
+        bool,
+        typer.Option("--json", help="Parse value as JSON"),
+    ] = False,
+) -> None:
+    """Set a slot value with automatic metadata update and consistency check."""
+    from fact_layer.core.editor import SetResult, parse_value, set_slot
+    from fact_layer.core.registry import resolve_facts_dir
+
+    facts_dir = resolve_facts_dir()
+    if not facts_dir:
+        console.print("[red]No .facts/ directory found. Run 'fl init' first.[/red]")
+        raise typer.Exit(1)
+
+    parsed = parse_value(value, force_json=json_mode)
+
+    try:
+        result = set_slot(facts_dir, slot, parsed, reason=reason)
+    except (ValueError, KeyError, FileNotFoundError) as e:
+        console.print(f"[red]{e}[/red]")
+        raise typer.Exit(1)
+
+    console.print(f"[green]Updated {result.slot_ref}[/green]")
+    console.print(f"  {result.old_value} → {result.new_value}")
+
+    if result.impact and result.impact.targets:
+        console.print("\n  [bold]Downstream dependencies:[/bold]")
+        for t in result.impact.targets:
+            strength = "(MUST update)" if t.is_strong else "(should check)"
+            console.print(f"    {t.slot:<35} {t.relation_type:<16} {strength}")
+
+    errors = [i for i in result.check_issues if i.severity.value == "error"]
+    warnings = [i for i in result.check_issues if i.severity.value == "warning"]
+    if errors or warnings:
+        console.print(f"\n  [bold]Check: {len(errors)} errors, {len(warnings)} warnings[/bold]")
+        for issue in errors:
+            console.print(f"  [red]x[/red] {issue.message}")
+
+
+@app.command()
+def add(
+    category: Annotated[str, typer.Argument(help="Category name, e.g. tech-stack")],
+    slot_id: Annotated[str, typer.Argument(help="New slot ID, e.g. orm")],
+    value: Annotated[str, typer.Argument(help="Slot value")],
+    reason: Annotated[
+        Optional[str],
+        typer.Option("--reason", "-r", help="Reason for adding"),
+    ] = None,
+    json_mode: Annotated[
+        bool,
+        typer.Option("--json", help="Parse value as JSON"),
+    ] = False,
+) -> None:
+    """Add a new slot to an existing category."""
+    from fact_layer.core.editor import parse_value, add_slot
+    from fact_layer.core.registry import resolve_facts_dir
+
+    facts_dir = resolve_facts_dir()
+    if not facts_dir:
+        console.print("[red]No .facts/ directory found. Run 'fl init' first.[/red]")
+        raise typer.Exit(1)
+
+    parsed = parse_value(value, force_json=json_mode)
+
+    try:
+        result = add_slot(facts_dir, category, slot_id, parsed, reason=reason)
+    except (ValueError, KeyError, FileNotFoundError) as e:
+        console.print(f"[red]{e}[/red]")
+        raise typer.Exit(1)
+
+    console.print(f"[green]Added {result.category}.{result.slot_id}[/green]")
+    console.print(f"  Value: {result.value}")
+
+    errors = [i for i in result.check_issues if i.severity.value == "error"]
+    if errors:
+        console.print(f"\n  [bold]Check: {len(errors)} errors[/bold]")
+        for issue in errors:
+            console.print(f"  [red]x[/red] {issue.message}")
+
+
+@app.command()
+def deprecate(
+    slot: Annotated[str, typer.Argument(help="Slot to deprecate, e.g. tech-stack.legacy-db")],
+    reason: Annotated[
+        Optional[str],
+        typer.Option("--reason", "-r", help="Reason for deprecation"),
+    ] = None,
+) -> None:
+    """Mark a slot as superseded (soft-delete, preserves history)."""
+    from fact_layer.core.editor import deprecate_slot
+    from fact_layer.core.registry import resolve_facts_dir
+
+    facts_dir = resolve_facts_dir()
+    if not facts_dir:
+        console.print("[red]No .facts/ directory found. Run 'fl init' first.[/red]")
+        raise typer.Exit(1)
+
+    try:
+        result = deprecate_slot(facts_dir, slot, reason=reason)
+    except (ValueError, KeyError, FileNotFoundError) as e:
+        console.print(f"[red]{e}[/red]")
+        raise typer.Exit(1)
+
+    console.print(f"[yellow]Deprecated {result.slot_ref}[/yellow]")
+    console.print(f"  Status: {result.old_status} → superseded")
+
+    if result.impact and result.impact.targets:
+        console.print("\n  [bold]Warning — downstream dependencies:[/bold]")
+        for t in result.impact.targets:
+            strength = "(MUST update)" if t.is_strong else "(should check)"
+            console.print(f"    [yellow]{t.slot:<35} {t.relation_type:<16} {strength}[/yellow]")
+
+
+@app.command()
+def suggest(
+    model: Annotated[
+        str,
+        typer.Option("--model", "-m", help="Claude model to use"),
+    ] = "claude-sonnet-4-6",
+    yes: Annotated[
+        bool,
+        typer.Option("--yes", "-y", help="Auto-accept all suggestions"),
+    ] = False,
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Show suggestions without applying"),
+    ] = False,
+) -> None:
+    """Generate LLM-powered fix suggestions for issues found by fl check."""
+    from fact_layer.core.auditor import estimate_tokens
+    from fact_layer.core.checker import run_check
+    from fact_layer.core.editor import parse_value
+    from fact_layer.core.registry import resolve_facts_dir
+    from fact_layer.core.suggest_cmd import (
+        apply_suggestion,
+        build_suggest_prompt,
+        run_suggest,
+    )
+
+    facts_dir = resolve_facts_dir()
+    if not facts_dir:
+        console.print("[red]No .facts/ directory found. Run 'fl init' first.[/red]")
+        raise typer.Exit(1)
+
+    check_result = run_check(facts_dir)
+    if not check_result.issues:
+        console.print("[green]No issues found by fl check. Nothing to suggest.[/green]")
+        raise typer.Exit(0)
+
+    n_err = len(check_result.errors)
+    n_warn = len(check_result.warnings)
+    console.print(f"[bold]fl check found {n_err} errors, {n_warn} warnings.[/bold]")
+
+    prompt = build_suggest_prompt(facts_dir, check_result.issues)
+    token_est = estimate_tokens(prompt)
+    console.print(f"  Calling LLM (~{token_est} tokens, model: {model})...\n")
+
+    result = run_suggest(facts_dir, model=model)
+
+    if result.error:
+        console.print(f"[red]{result.error}[/red]")
+        raise typer.Exit(1)
+
+    if not result.suggestions:
+        console.print("[yellow]LLM returned no actionable suggestions.[/yellow]")
+        raise typer.Exit(0)
+
+    console.print(f"[bold]{len(result.suggestions)} suggestion(s):[/bold]\n")
+
+    applied = 0
+    skipped = 0
+
+    for idx, s in enumerate(result.suggestions, 1):
+        console.print(f"  [bold][{idx}/{len(result.suggestions)}] {s.slot}[/bold]")
+        console.print(f"    Current:   {s.current_value}")
+        console.print(f"    Suggested: [green]{s.suggested_value}[/green]")
+        console.print(f"    Reason:    {s.reason}")
+
+        if dry_run:
+            console.print("    [dim](dry-run, not applied)[/dim]\n")
+            continue
+
+        if yes:
+            action = "y"
+        else:
+            action = Prompt.ask(
+                "    [Y] accept  [e] edit  [n] skip",
+                choices=["y", "e", "n"],
+                default="y",
+            )
+
+        if action == "y":
+            apply_suggestion(facts_dir, s)
+            console.print(f"    [green]Applied.[/green]\n")
+            applied += 1
+        elif action == "e":
+            edited = Prompt.ask("    New value", default=str(s.suggested_value))
+            parsed = parse_value(edited)
+            s.suggested_value = parsed
+            apply_suggestion(facts_dir, s, source="human")
+            console.print(f"    [green]Applied (edited).[/green]\n")
+            applied += 1
+        else:
+            console.print(f"    [dim]Skipped.[/dim]\n")
+            skipped += 1
+
+    if not dry_run:
+        console.print(f"  [bold]Done: {applied} applied, {skipped} skipped.[/bold]")
+        if applied > 0:
+            post_check = run_check(facts_dir)
+            n_err = len(post_check.errors)
+            n_warn = len(post_check.warnings)
+            console.print(f"  Post-check: {n_err} errors, {n_warn} warnings.")
 
 
 @app.command()
@@ -272,10 +502,16 @@ def audit(
         bool,
         typer.Option("--yes", "-y", help="Skip confirmation prompt"),
     ] = False,
+    fix: Annotated[
+        bool,
+        typer.Option("--fix", help="Interactively apply fixes from audit findings"),
+    ] = False,
 ) -> None:
     """Run an LLM-powered semantic consistency audit across all canonical facts."""
-    from fact_layer.core.auditor import AuditFinding, build_audit_prompt, estimate_tokens, run_audit
+    from fact_layer.core.auditor import build_audit_prompt, estimate_tokens, run_audit
+    from fact_layer.core.editor import parse_value
     from fact_layer.core.registry import resolve_facts_dir
+    from fact_layer.core.suggest_cmd import Suggestion, apply_suggestion
 
     facts_dir = resolve_facts_dir()
     if not facts_dir:
@@ -323,3 +559,61 @@ def audit(
         console.print()
 
     console.print(f"  [bold]{result.summary}[/bold]")
+
+    if fix:
+        fixable = [f for f in result.findings if f.fixes]
+        if not fixable:
+            console.print("\n[yellow]No findings have concrete fixes. Use fl suggest for rule-based issues.[/yellow]")
+            return
+
+        from fact_layer.core.loader import load_all_categories
+
+        categories = load_all_categories(facts_dir)
+        suggestions: list[Suggestion] = []
+        for finding in fixable:
+            for audit_fix in finding.fixes:
+                from fact_layer.core.suggest_cmd import _resolve_current_value
+
+                current = _resolve_current_value(audit_fix.slot, categories)
+                suggestions.append(Suggestion(
+                    slot=audit_fix.slot,
+                    current_value=current,
+                    suggested_value=audit_fix.value,
+                    reason=finding.suggestion or finding.description,
+                ))
+
+        console.print(f"\n[bold]{len(suggestions)} fixable suggestion(s):[/bold]\n")
+        applied = 0
+        skipped = 0
+
+        for idx, s in enumerate(suggestions, 1):
+            console.print(f"  [bold][{idx}/{len(suggestions)}] {s.slot}[/bold]")
+            console.print(f"    Current:   {s.current_value}")
+            console.print(f"    Suggested: [green]{s.suggested_value}[/green]")
+            console.print(f"    Reason:    {s.reason}")
+
+            if yes:
+                action = "y"
+            else:
+                action = Prompt.ask(
+                    "    [Y] accept  [e] edit  [n] skip",
+                    choices=["y", "e", "n"],
+                    default="y",
+                )
+
+            if action == "y":
+                apply_suggestion(facts_dir, s)
+                console.print(f"    [green]Applied.[/green]\n")
+                applied += 1
+            elif action == "e":
+                edited = Prompt.ask("    New value", default=str(s.suggested_value))
+                parsed = parse_value(edited)
+                s.suggested_value = parsed
+                apply_suggestion(facts_dir, s, source="human")
+                console.print(f"    [green]Applied (edited).[/green]\n")
+                applied += 1
+            else:
+                console.print(f"    [dim]Skipped.[/dim]\n")
+                skipped += 1
+
+        console.print(f"  [bold]Done: {applied} applied, {skipped} skipped.[/bold]")

@@ -4,6 +4,7 @@ import importlib.resources
 import json
 import os
 from pathlib import Path
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -13,12 +14,18 @@ from fact_layer.models.dependency import DependencyGraph
 from fact_layer.models.slot import ACTIVE_STATUSES
 
 
+class AuditFix(BaseModel):
+    slot: str
+    value: Any = None
+
+
 class AuditFinding(BaseModel):
     severity: str
     type: str
     slots: list[str] = []
     description: str
     suggestion: str = ""
+    fixes: list[AuditFix] = []
 
 
 class AuditResult(BaseModel):
@@ -33,7 +40,7 @@ def _load_prompt_template() -> str:
     return tmpl_path.read_text(encoding="utf-8")
 
 
-def _format_dependency_graph(graph: DependencyGraph) -> str:
+def format_dependency_graph(graph: DependencyGraph) -> str:
     if not graph.static:
         return "No dependency rules defined."
     lines = []
@@ -43,7 +50,7 @@ def _format_dependency_graph(graph: DependencyGraph) -> str:
     return "\n".join(lines)
 
 
-def _format_decisions(categories: dict) -> str:
+def format_decisions(categories: dict) -> str:
     dec_cat = categories.get("decisions")
     if not dec_cat or not dec_cat.slots:
         return "No active decisions."
@@ -73,8 +80,8 @@ def build_audit_prompt(facts_dir: Path) -> str:
     template = _load_prompt_template()
     return template.format(
         facts_markdown=facts_md,
-        dependency_graph=_format_dependency_graph(graph),
-        decisions=_format_decisions(categories),
+        dependency_graph=format_dependency_graph(graph),
+        decisions=format_decisions(categories),
     )
 
 

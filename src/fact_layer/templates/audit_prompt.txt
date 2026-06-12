@@ -32,7 +32,9 @@ For each finding, classify it as:
 
 Respond ONLY with a JSON object in this exact format (no markdown fences, no extra text):
 
-{{"findings": [{{"severity": "warning", "type": "contradiction|staleness|missing|suggestion", "slots": ["category.slot1", "category.slot2"], "description": "what the issue is", "suggestion": "how to fix it"}}], "summary": "N warnings, M suggestions"}}
+{{"findings": [{{"severity": "warning", "type": "contradiction|staleness|missing|suggestion", "slots": ["category.slot1", "category.slot2"], "description": "what the issue is", "suggestion": "how to fix it", "fixes": [{{"slot": "category.slot1", "value": "corrected value"}}]}}], "summary": "N warnings, M suggestions"}}
+
+The "fixes" array is optional. Include it when you can suggest a concrete new value for a slot. Each fix targets one slot with the exact value it should be changed to. Omit "fixes" or leave it empty when the issue requires human judgment.
 
 If everything looks consistent, respond with:
 
