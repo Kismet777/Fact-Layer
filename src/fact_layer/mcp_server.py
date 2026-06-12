@@ -130,6 +130,37 @@ def facts_export(budget: int | None = None) -> str:
     return render_export(facts_dir)
 
 
+@mcp.tool()
+def facts_scan(
+    paths: list[str] | None = None,
+    categories: list[str] | None = None,
+    extractors: list[str] | None = None,
+) -> dict:
+    """Scan project files to extract candidate facts for .facts/ slots.
+
+    Deterministic extraction from config files (pyproject.toml, Dockerfile,
+    docker-compose.yaml, package.json, CI configs). Returns candidates,
+    conflicts, and unmapped facts — does NOT write anything.
+
+    Args:
+        paths: File or directory paths to scan. Omit to auto-discover from project root.
+        categories: Only return candidates for these categories. Omit for all.
+        extractors: Only use these extractors (e.g. ["config"]). Omit for all available.
+    """
+    facts_dir = _require_facts_dir()
+    project_root = facts_dir.parent
+
+    from fact_layer.core.scanner.pipeline import run_scan
+
+    result = run_scan(
+        project_root=project_root,
+        paths=paths,
+        categories=categories,
+        extractors=extractors,
+    )
+    return result.model_dump(mode="json")
+
+
 def main():
     mcp.run()
 
