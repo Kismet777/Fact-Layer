@@ -85,3 +85,32 @@ class TestScanCLI:
         result = runner.invoke(app, ["scan", "--dry-run"])
         assert result.exit_code == 0
         assert "0" in result.output or "No candidates" in result.output
+
+    def test_scan_with_model_option(self, tmp_path: Path, monkeypatch):
+        proj = _setup_project(tmp_path)
+        monkeypatch.chdir(proj)
+        result = runner.invoke(app, ["scan", "--dry-run", "--model", "claude-haiku-4-5-20251001"])
+        assert result.exit_code == 0
+
+    def test_scan_with_extractor_filter(self, tmp_path: Path, monkeypatch):
+        proj = _setup_project(tmp_path)
+        monkeypatch.chdir(proj)
+        result = runner.invoke(app, ["scan", "--dry-run", "--extractor", "config"])
+        assert result.exit_code == 0
+        assert "tech-stack" in result.output or "candidates" in result.output.lower()
+
+    def test_scan_summary_includes_unmapped(self, tmp_path: Path, monkeypatch):
+        proj = _setup_project(tmp_path)
+        monkeypatch.chdir(proj)
+        result = runner.invoke(app, ["scan", "--dry-run"])
+        assert result.exit_code == 0
+        assert "unmapped" in result.output.lower()
+
+    def test_scan_json_includes_unmapped(self, tmp_path: Path, monkeypatch):
+        proj = _setup_project(tmp_path)
+        monkeypatch.chdir(proj)
+        result = runner.invoke(app, ["scan", "--dry-run", "--json"])
+        assert result.exit_code == 0
+        import json
+        data = json.loads(result.output)
+        assert "unmapped" in data

@@ -93,3 +93,23 @@ build-backend = "hatchling.build"
     def test_scan_empty(self, project_dir: Path):
         result = facts_scan(paths=[])
         assert result["stats"]["candidates_found"] == 0
+
+    def test_scan_with_model(self, project_dir: Path):
+        toml = project_dir / "pyproject.toml"
+        toml.write_text('[project]\nname = "x"\nrequires-python = ">=3.12"\n')
+        result = facts_scan(paths=[str(toml)], model="claude-haiku-4-5-20251001")
+        assert result["stats"]["candidates_found"] >= 1
+
+    def test_scan_with_extractors_filter(self, project_dir: Path):
+        toml = project_dir / "pyproject.toml"
+        toml.write_text('[project]\nname = "x"\nrequires-python = ">=3.12"\n')
+        result = facts_scan(paths=[str(toml)], extractors=["config"])
+        for c in result["candidates"]:
+            assert c["extractor"] == "config-parser"
+
+    def test_result_includes_unmapped(self, project_dir: Path):
+        toml = project_dir / "pyproject.toml"
+        toml.write_text('[project]\nname = "x"\nrequires-python = ">=3.12"\n')
+        result = facts_scan(paths=[str(toml)])
+        assert "unmapped" in result
+        assert isinstance(result["unmapped"], list)

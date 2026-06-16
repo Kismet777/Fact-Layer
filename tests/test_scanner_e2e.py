@@ -1,7 +1,11 @@
 # tests/test_scanner_e2e.py
 """End-to-end integration test: scan a realistic project, verify full pipeline."""
 
+from __future__ import annotations
+
+import json as json_mod
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 from fact_layer.core.init_cmd import init_facts_dir
 from fact_layer.core.scanner.pipeline import run_scan
@@ -123,11 +127,108 @@ class TestEndToEnd:
             assert c.confidence in ("high", "medium", "low")
 
     def test_scan_result_serializable(self, tmp_path: Path):
-        import json
-
         proj = _build_realistic_project(tmp_path)
         result = run_scan(proj)
         data = result.model_dump(mode="json")
-        json_str = json.dumps(data)
-        roundtrip = json.loads(json_str)
+        json_str = json_mod.dumps(data)
+        roundtrip = json_mod.loads(json_str)
         assert roundtrip["stats"]["files_scanned"] == result.stats.files_scanned
+
+    def test_mixed_config_and_markdown(self, tmp_path: Path):
+        """Config + markdown extractors coexist; mock LLM for markdown."""
+        proj = _build_realistic_project(tmp_path)
+        readme = proj / "README.md"
+        readme.write_text("# Realistic Project\nBuilt with FastAPI and PostgreSQL 16.\n")
+
+        mock_response = json_mod.dumps({"candidates": [{
+            "category": "tech-stack",
+            "slot": "database",
+            "value": "PostgreSQL 16",
+            "confidence": "medium",
+            "evidence": "Built with FastAPI and PostgreSQL 16.",
+        }], "unmapped": []})
+
+        mock_msg = MagicMock()
+        mock_msg.content = [MagicMock(text=mock_response)]
+        mock_mod = MagicMock()
+        mock_mod.Anthropic.return_value.messages.create.return_value = mock_msg
+
+        with patch(
+            "fact_layer.core.scanner.extractors.markdown._anthropic_mod", mock_mod,
+        ):
+            result = run_scan(proj, api_key="sk-test")
+
+        extractors_used = {c.extractor for c in result.candidates}
+        assert "config-parser" in extractors_used
+
+    def test_no_api_key_skips_markdown(self, tmp_path: Path):
+        """Without API key, markdown files are discovered but produce no results."""
+        proj = _build_realistic_project(tmp_path)
+        readme = proj / "README.md"
+        readme.write_text("# Hello\n")
+        result = run_scan(proj)
+        for c in result.candidates:
+            assert c.extractor == "config-parser"
+
+    def test_extractor_filter_excludes_markdown(self, tmp_path: Path):
+        proj = _build_realistic_project(tmp_path)
+        readme = proj / "README.md"
+        readme.write_text("# Hello\n")
+        result = run_scan(proj, extractors=["config"], api_key="sk-test")
+        for c in result.candidates:
+            assert c.extractor == "config-parser"
+
+    def test_unmapped_flows_through_pipeline(self, tmp_path: Path):
+        """Unmapped facts from LLM extractor appear in final ScanResult."""
+        proj = _build_realistic_project(tmp_path)
+        readme = proj / "README.md"
+        readme.write_text("# Project\nWe use trunk-based development.\n")
+
+        mock_response = json_mod.dumps({"candidates": [], "unmapped": [{
+            "fact": "Uses trunk-based development",
+            "evidence": "We use trunk-based development.",
+            "suggested_category": "conventions",
+            "suggested_slot": "branching-strategy",
+        }]})
+
+        mock_msg = MagicMock()
+        mock_msg.content = [MagicMock(text=mock_response)]
+        mock_mod = MagicMock()
+        mock_mod.Anthropic.return_value.messages.create.return_value = mock_msg
+
+        with patch(
+            "fact_layer.core.scanner.extractors.markdown._anthropic_mod", mock_mod,
+        ):
+            result = run_scan(proj, api_key="sk-test")
+
+        assert len(result.unmapped) >= 1
+        assert result.stats.unmapped >= 1
+        assert any(u.fact == "Uses trunk-based development" for u in result.unmapped)
+
+    def test_dedup_config_wins_over_markdown(self, tmp_path: Path):
+        """When config and markdown extract same slot, config-parser wins by rank."""
+        proj = _build_realistic_project(tmp_path)
+        readme = proj / "README.md"
+        readme.write_text("# Project\nBuilt with FastAPI.\n")
+
+        mock_response = json_mod.dumps({"candidates": [{
+            "category": "tech-stack",
+            "slot": "framework",
+            "value": "FastAPI",
+            "confidence": "medium",
+            "evidence": "Built with FastAPI.",
+        }], "unmapped": []})
+
+        mock_msg = MagicMock()
+        mock_msg.content = [MagicMock(text=mock_response)]
+        mock_mod = MagicMock()
+        mock_mod.Anthropic.return_value.messages.create.return_value = mock_msg
+
+        with patch(
+            "fact_layer.core.scanner.extractors.markdown._anthropic_mod", mock_mod,
+        ):
+            result = run_scan(proj, api_key="sk-test")
+
+        framework_candidates = [c for c in result.candidates if c.slot == "framework"]
+        assert len(framework_candidates) == 1
+        assert framework_candidates[0].extractor == "config-parser"

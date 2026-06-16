@@ -5,7 +5,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fact_layer.core.scanner.candidates import ScanResult, ScanStats, SlotCandidate
+from fact_layer.core.scanner.candidates import (
+    ExtractResult,
+    ScanContext,
+    ScanResult,
+    ScanStats,
+    SlotCandidate,
+    UnmappedFact,
+)
 from fact_layer.core.scanner.dedup import deduplicate
 from fact_layer.core.scanner.extractors.config import (
     extract_dockerfile,
@@ -30,8 +37,19 @@ GLOB_PATTERNS = {
     ".github/workflows/*.yml": extract_github_actions,
 }
 
+MAX_MARKDOWN_SIZE = 102_400  # 100KB
 
-def _discover_files(project_root: Path, paths: list[str] | None) -> list[Path]:
+_EXTRACTOR_TYPE_MAP = {
+    "config": "config-parser",
+    "markdown": "llm-markdown",
+}
+
+
+def _discover_files(
+    project_root: Path,
+    paths: list[str] | None,
+    include_markdown: bool = True,
+) -> list[Path]:
     if paths:
         found: list[Path] = []
         for p in paths:
@@ -47,31 +65,55 @@ def _discover_files(project_root: Path, paths: list[str] | None) -> list[Path]:
                         found.append(candidate)
                 for pattern in GLOB_PATTERNS:
                     found.extend(resolved.glob(pattern))
+                if include_markdown:
+                    for md in resolved.glob("*.md"):
+                        if md.stat().st_size <= MAX_MARKDOWN_SIZE:
+                            found.append(md)
         return found
 
-    found = []
+    found: list[Path] = []
     for name in CONFIG_FILE_PATTERNS:
         candidate = project_root / name
         if candidate.is_file():
             found.append(candidate)
     for pattern in GLOB_PATTERNS:
         found.extend(project_root.glob(pattern))
+    if include_markdown:
+        for md in project_root.glob("*.md"):
+            if md.stat().st_size <= MAX_MARKDOWN_SIZE:
+                found.append(md)
     return found
 
 
-def _dispatch(path: Path) -> list[SlotCandidate]:
+def _dispatch(
+    path: Path,
+    context: ScanContext,
+    allowed_extractors: set[str] | None = None,
+) -> ExtractResult:
     name = path.name
+
     if name in CONFIG_FILE_PATTERNS:
-        return CONFIG_FILE_PATTERNS[name](path)
+        if allowed_extractors and "config-parser" not in allowed_extractors:
+            return ExtractResult()
+        return CONFIG_FILE_PATTERNS[name](path, context)
 
     for pattern, extractor in GLOB_PATTERNS.items():
         parts = pattern.split("/")
         if len(parts) >= 2:
             parent_match = parts[-2] if len(parts) == 2 else "/".join(parts[:-1])
             if parent_match in str(path.parent) and path.suffix in (".yaml", ".yml"):
-                return extractor(path)
+                if allowed_extractors and "config-parser" not in allowed_extractors:
+                    return ExtractResult()
+                return extractor(path, context)
 
-    return []
+    if path.suffix == ".md":
+        if allowed_extractors and "llm-markdown" not in allowed_extractors:
+            return ExtractResult()
+        from fact_layer.core.scanner.extractors.markdown import extract_markdown
+
+        return extract_markdown(path, context)
+
+    return ExtractResult()
 
 
 def run_scan(
@@ -79,17 +121,47 @@ def run_scan(
     paths: list[str] | None = None,
     categories: list[str] | None = None,
     extractors: list[str] | None = None,
+    api_key: str | None = None,
+    model: str = "claude-sonnet-4-6",
 ) -> ScanResult:
-    files = _discover_files(project_root, paths)
+    allowed_extractors: set[str] | None = None
+    if extractors:
+        allowed_extractors = set()
+        for e in extractors:
+            if e in _EXTRACTOR_TYPE_MAP:
+                allowed_extractors.add(_EXTRACTOR_TYPE_MAP[e])
+
+    include_markdown = allowed_extractors is None or "llm-markdown" in allowed_extractors
+
+    facts_dir = project_root / ".facts"
+    fw = None
+    cats = None
+    if facts_dir.is_dir() and (facts_dir / "framework.yaml").is_file():
+        from fact_layer.core.loader import load_all_categories, load_framework
+
+        fw = load_framework(facts_dir)
+        cats = load_all_categories(facts_dir)
+
+    context = ScanContext(
+        facts_dir=facts_dir if facts_dir.is_dir() else None,
+        framework=fw,
+        categories=cats,
+        api_key=api_key,
+        model=model,
+    )
+
+    files = _discover_files(project_root, paths, include_markdown=include_markdown)
 
     all_candidates: list[SlotCandidate] = []
+    all_unmapped: list[UnmappedFact] = []
     files_scanned = 0
 
     for f in files:
-        candidates = _dispatch(f)
-        if candidates:
+        result = _dispatch(f, context, allowed_extractors)
+        if result.candidates or result.unmapped:
             files_scanned += 1
-            all_candidates.extend(candidates)
+            all_candidates.extend(result.candidates)
+            all_unmapped.extend(result.unmapped)
 
     if categories:
         all_candidates = [c for c in all_candidates if c.category in categories]
@@ -99,11 +171,11 @@ def run_scan(
     return ScanResult(
         candidates=merged,
         conflicts=conflicts,
-        unmapped=[],
+        unmapped=all_unmapped,
         stats=ScanStats(
             files_scanned=files_scanned,
             candidates_found=len(merged),
             conflicts=len(conflicts),
-            unmapped=0,
+            unmapped=len(all_unmapped),
         ),
     )

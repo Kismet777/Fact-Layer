@@ -10,7 +10,7 @@ from typing import Any
 
 from ruamel.yaml import YAML
 
-from fact_layer.core.scanner.candidates import SlotCandidate
+from fact_layer.core.scanner.candidates import ExtractResult, ScanContext, SlotCandidate
 
 _yaml = YAML()
 _yaml.preserve_quotes = True
@@ -47,17 +47,17 @@ def _candidate(
     )
 
 
-def extract_pyproject(path: Path) -> list[SlotCandidate]:
+def extract_pyproject(path: Path, context: ScanContext | None = None) -> ExtractResult:
     """Extract facts from pyproject.toml."""
     if not path.is_file():
-        return []
+        return ExtractResult()
     try:
         with path.open("rb") as f:
             data = tomllib.load(f)
     except Exception:
-        return []
+        return ExtractResult()
     if not data:
-        return []
+        return ExtractResult()
 
     results: list[SlotCandidate] = []
     src = str(path)
@@ -139,13 +139,13 @@ def extract_pyproject(path: Path) -> list[SlotCandidate]:
             source=src, evidence="[tool.pdm] section found",
         ))
 
-    return results
+    return ExtractResult(candidates=results)
 
 
-def extract_dockerfile(path: Path) -> list[SlotCandidate]:
+def extract_dockerfile(path: Path, context: ScanContext | None = None) -> ExtractResult:
     """Extract facts from a Dockerfile."""
     if not path.is_file():
-        return []
+        return ExtractResult()
 
     results: list[SlotCandidate] = []
     src = str(path)
@@ -153,7 +153,7 @@ def extract_dockerfile(path: Path) -> list[SlotCandidate]:
     try:
         content = path.read_text(encoding="utf-8")
     except Exception:
-        return []
+        return ExtractResult()
 
     for line in content.splitlines():
         stripped = line.strip()
@@ -166,22 +166,22 @@ def extract_dockerfile(path: Path) -> list[SlotCandidate]:
                 ))
                 break
 
-    return results
+    return ExtractResult(candidates=results)
 
 
-def extract_docker_compose(path: Path) -> list[SlotCandidate]:
+def extract_docker_compose(path: Path, context: ScanContext | None = None) -> ExtractResult:
     """Extract facts from docker-compose.yaml."""
     if not path.is_file():
-        return []
+        return ExtractResult()
 
     try:
         with path.open("r", encoding="utf-8") as f:
             data = _yaml.load(f)
     except Exception:
-        return []
+        return ExtractResult()
 
     if not data or not isinstance(data, dict):
-        return []
+        return ExtractResult()
 
     results: list[SlotCandidate] = []
     src = str(path)
@@ -213,21 +213,21 @@ def extract_docker_compose(path: Path) -> list[SlotCandidate]:
                     evidence=f"image: {image}",
                 ))
 
-    return results
+    return ExtractResult(candidates=results)
 
 
-def extract_package_json(path: Path) -> list[SlotCandidate]:
+def extract_package_json(path: Path, context: ScanContext | None = None) -> ExtractResult:
     """Extract facts from package.json."""
     if not path.is_file():
-        return []
+        return ExtractResult()
 
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except Exception:
-        return []
+        return ExtractResult()
 
     if not data or not isinstance(data, dict):
-        return []
+        return ExtractResult()
 
     results: list[SlotCandidate] = []
     src = str(path)
@@ -276,13 +276,13 @@ def extract_package_json(path: Path) -> list[SlotCandidate]:
             confidence="medium",
         ))
 
-    return results
+    return ExtractResult(candidates=results)
 
 
-def extract_github_actions(path: Path) -> list[SlotCandidate]:
+def extract_github_actions(path: Path, context: ScanContext | None = None) -> ExtractResult:
     """Extract facts from a GitHub Actions workflow file."""
     if not path.is_file():
-        return []
+        return ExtractResult()
 
     try:
         with path.open("r", encoding="utf-8") as f:
@@ -291,15 +291,15 @@ def extract_github_actions(path: Path) -> list[SlotCandidate]:
         return []
 
     if not data or not isinstance(data, dict):
-        return []
+        return ExtractResult()
 
     src = str(path)
     workflow_name = data.get("name", path.stem)
     triggers = list(data.get("on", {}).keys()) if isinstance(data.get("on"), dict) else []
     trigger_str = ", ".join(triggers) if triggers else "unknown"
 
-    return [_candidate(
+    return ExtractResult(candidates=[_candidate(
         "build-deploy", "ci", "GitHub Actions",
         source=src,
         evidence=f"workflow: {workflow_name} (on: {trigger_str})",
-    )]
+    )])

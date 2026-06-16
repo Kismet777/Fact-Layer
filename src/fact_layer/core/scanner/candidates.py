@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Literal
 
 from pydantic import BaseModel
@@ -38,6 +39,24 @@ class UnmappedFact(BaseModel):
     source: str
     suggested_category: str | None = None
     suggested_slot: str | None = None
+    evidence: str = ""
+
+
+class ScanContext(BaseModel):
+    """Runtime context passed to all extractors."""
+
+    facts_dir: Path | None = None
+    framework: Any = None
+    categories: dict[str, Any] | None = None
+    api_key: str | None = None
+    model: str = "claude-sonnet-4-6"
+
+
+class ExtractResult(BaseModel):
+    """Output of an extractor: mapped candidates + unmapped facts."""
+
+    candidates: list[SlotCandidate] = []
+    unmapped: list[UnmappedFact] = []
 
 
 class ScanStats(BaseModel):

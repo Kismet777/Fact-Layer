@@ -26,7 +26,7 @@ pydantic = ">=2.0"
 sqlalchemy = ">=2.0"
 """)
         results = extract_pyproject(toml)
-        by_slot = {c.slot: c for c in results}
+        by_slot = {c.slot: c for c in results.candidates}
 
         assert "language" in by_slot
         assert "3.12" in by_slot["language"].value
@@ -35,7 +35,7 @@ sqlalchemy = ">=2.0"
         libs = by_slot["key-libraries"].value
         assert "fastapi" in libs or any("fastapi" in str(l) for l in libs)
 
-        for c in results:
+        for c in results.candidates:
             assert c.extractor == "config-parser"
             assert c.confidence == "high"
             assert "pyproject.toml" in c.source
@@ -52,7 +52,7 @@ django = "^5.0"
 celery = "^5.3"
 """)
         results = extract_pyproject(toml)
-        by_slot = {c.slot: c for c in results}
+        by_slot = {c.slot: c for c in results.candidates}
         assert "language" in by_slot
         assert "key-libraries" in by_slot
 
@@ -68,19 +68,19 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 """)
         results = extract_pyproject(toml)
-        by_slot = {c.slot: c for c in results}
+        by_slot = {c.slot: c for c in results.candidates}
         assert "build-tool" in by_slot
         assert "hatch" in by_slot["build-tool"].value.lower()
 
     def test_missing_file(self, tmp_path: Path):
         results = extract_pyproject(tmp_path / "nonexistent.toml")
-        assert results == []
+        assert results.candidates == []
 
     def test_empty_file(self, tmp_path: Path):
         toml = tmp_path / "pyproject.toml"
         toml.write_text("")
         results = extract_pyproject(toml)
-        assert results == []
+        assert results.candidates == []
 
     def test_detects_framework(self, tmp_path: Path):
         toml = tmp_path / "pyproject.toml"
@@ -93,7 +93,7 @@ requires-python = ">=3.12"
 flask = ">=3.0"
 """)
         results = extract_pyproject(toml)
-        by_slot = {c.slot: c for c in results}
+        by_slot = {c.slot: c for c in results.candidates}
         assert "framework" in by_slot
         assert "flask" in by_slot["framework"].value.lower()
 
@@ -108,7 +108,7 @@ requires-python = ">=3.12"
 dev-dependencies = ["pytest"]
 """)
         results = extract_pyproject(toml)
-        by_slot = {c.slot: c for c in results}
+        by_slot = {c.slot: c for c in results.candidates}
         assert "package-manager" in by_slot
         assert by_slot["package-manager"].value == "uv"
 
@@ -118,8 +118,8 @@ class TestExtractDockerfile:
         df = tmp_path / "Dockerfile"
         df.write_text("FROM python:3.12-slim\nRUN pip install poetry\n")
         results = extract_dockerfile(df)
-        assert len(results) >= 1
-        by_slot = {c.slot: c for c in results}
+        assert len(results.candidates) >= 1
+        by_slot = {c.slot: c for c in results.candidates}
         assert "docker" in by_slot
         assert "python:3.12-slim" in by_slot["docker"].value
 
@@ -127,18 +127,18 @@ class TestExtractDockerfile:
         df = tmp_path / "Dockerfile"
         df.write_text("FROM node:20-alpine AS builder\nRUN npm ci\nFROM node:20-alpine\n")
         results = extract_dockerfile(df)
-        assert len(results) >= 1
-        assert "node:20-alpine" in results[0].value
+        assert len(results.candidates) >= 1
+        assert "node:20-alpine" in results.candidates[0].value
 
     def test_missing_file(self, tmp_path: Path):
         results = extract_dockerfile(tmp_path / "Dockerfile")
-        assert results == []
+        assert results.candidates == []
 
     def test_scratch_image(self, tmp_path: Path):
         df = tmp_path / "Dockerfile"
         df.write_text("FROM scratch\nCOPY binary /\n")
         results = extract_dockerfile(df)
-        assert results == []
+        assert results.candidates == []
 
 
 class TestExtractDockerCompose:
@@ -152,7 +152,7 @@ services:
     build: .
 """)
         results = extract_docker_compose(dc)
-        by_slot = {c.slot: c for c in results}
+        by_slot = {c.slot: c for c in results.candidates}
         assert "database" in by_slot
         assert "PostgreSQL" in by_slot["database"].value
         assert "16" in by_slot["database"].value
@@ -165,7 +165,7 @@ services:
     image: redis:7-alpine
 """)
         results = extract_docker_compose(dc)
-        assert any("Redis" in c.value for c in results)
+        assert any("Redis" in c.value for c in results.candidates)
 
     def test_no_db_services(self, tmp_path: Path):
         dc = tmp_path / "docker-compose.yaml"
@@ -175,11 +175,11 @@ services:
     build: .
 """)
         results = extract_docker_compose(dc)
-        assert results == []
+        assert results.candidates == []
 
     def test_missing_file(self, tmp_path: Path):
         results = extract_docker_compose(tmp_path / "docker-compose.yaml")
-        assert results == []
+        assert results.candidates == []
 
 
 class TestExtractPackageJson:
@@ -198,7 +198,7 @@ class TestExtractPackageJson:
 }
 """)
         results = extract_package_json(pj)
-        by_slot = {c.slot: c for c in results}
+        by_slot = {c.slot: c for c in results.candidates}
         assert "framework" in by_slot
         assert "React" in by_slot["framework"].value
         assert "language" in by_slot
@@ -215,13 +215,13 @@ class TestExtractPackageJson:
 }
 """)
         results = extract_package_json(pj)
-        by_slot = {c.slot: c for c in results}
+        by_slot = {c.slot: c for c in results.candidates}
         assert "framework" in by_slot
         assert "Express" in by_slot["framework"].value
 
     def test_missing_file(self, tmp_path: Path):
         results = extract_package_json(tmp_path / "package.json")
-        assert results == []
+        assert results.candidates == []
 
 
 class TestExtractGitHubActions:
@@ -240,11 +240,41 @@ jobs:
       - uses: actions/checkout@v4
 """)
         results = extract_github_actions(wf)
-        assert len(results) == 1
-        assert results[0].slot == "ci"
-        assert results[0].value == "GitHub Actions"
-        assert "CI" in results[0].evidence
+        assert len(results.candidates) == 1
+        assert results.candidates[0].slot == "ci"
+        assert results.candidates[0].value == "GitHub Actions"
+        assert "CI" in results.candidates[0].evidence
 
     def test_missing_file(self, tmp_path: Path):
         results = extract_github_actions(tmp_path / "ci.yaml")
-        assert results == []
+        assert results.candidates == []
+
+
+class TestExtractResultType:
+    """Verify all extractors return ExtractResult and accept ScanContext."""
+
+    def test_pyproject_returns_extract_result(self, tmp_path: Path):
+        from fact_layer.core.scanner.candidates import ExtractResult, ScanContext
+
+        toml = tmp_path / "pyproject.toml"
+        toml.write_text('[project]\nname = "x"\nrequires-python = ">=3.12"\n')
+        result = extract_pyproject(toml, ScanContext())
+        assert isinstance(result, ExtractResult)
+        assert len(result.candidates) >= 1
+        assert result.unmapped == []
+
+    def test_dockerfile_returns_extract_result(self, tmp_path: Path):
+        from fact_layer.core.scanner.candidates import ExtractResult, ScanContext
+
+        df = tmp_path / "Dockerfile"
+        df.write_text("FROM python:3.12-slim\n")
+        result = extract_dockerfile(df, ScanContext())
+        assert isinstance(result, ExtractResult)
+
+    def test_github_actions_returns_extract_result(self, tmp_path: Path):
+        from fact_layer.core.scanner.candidates import ExtractResult, ScanContext
+
+        wf = tmp_path / "ci.yaml"
+        wf.write_text("name: CI\non:\n  push:\n    branches: [main]\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n")
+        result = extract_github_actions(wf, ScanContext())
+        assert isinstance(result, ExtractResult)

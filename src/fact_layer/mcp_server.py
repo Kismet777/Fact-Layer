@@ -135,18 +135,24 @@ def facts_scan(
     paths: list[str] | None = None,
     categories: list[str] | None = None,
     extractors: list[str] | None = None,
+    model: str = "claude-sonnet-4-6",
+    api_key: str | None = None,
 ) -> dict:
     """Scan project files to extract candidate facts for .facts/ slots.
 
-    Deterministic extraction from config files (pyproject.toml, Dockerfile,
-    docker-compose.yaml, package.json, CI configs). Returns candidates,
-    conflicts, and unmapped facts — does NOT write anything.
+    Extracts from config files (pyproject.toml, Dockerfile, docker-compose,
+    package.json, CI) and Markdown documents (README, CLAUDE.md, etc.).
+    Returns candidates, conflicts, and unmapped facts — does NOT write anything.
 
     Args:
         paths: File or directory paths to scan. Omit to auto-discover from project root.
         categories: Only return candidates for these categories. Omit for all.
-        extractors: Only use these extractors (e.g. ["config"]). Omit for all available.
+        extractors: Only use these extractors (e.g. ["config", "markdown"]). Omit for all.
+        model: LLM model for markdown extraction (default: claude-sonnet-4-6).
+        api_key: Anthropic API key. Falls back to ANTHROPIC_API_KEY env var.
     """
+    import os
+
     facts_dir = _require_facts_dir()
     project_root = facts_dir.parent
 
@@ -157,6 +163,8 @@ def facts_scan(
         paths=paths,
         categories=categories,
         extractors=extractors,
+        api_key=api_key or os.environ.get("ANTHROPIC_API_KEY"),
+        model=model,
     )
     return result.model_dump(mode="json")
 

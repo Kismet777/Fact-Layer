@@ -412,13 +412,27 @@ def scan(
         bool,
         typer.Option("--yes", "-y", help="Auto-accept all candidates"),
     ] = False,
+    model: Annotated[
+        str,
+        typer.Option("--model", "-m", help="LLM model for markdown extraction"),
+    ] = "claude-sonnet-4-6",
+    api_key: Annotated[
+        Optional[str],
+        typer.Option("--api-key", help="Anthropic API key (or set ANTHROPIC_API_KEY env)"),
+    ] = None,
+    extractor: Annotated[
+        Optional[str],
+        typer.Option("--extractor", "-e", help="Only use specific extractors (comma-separated: config,markdown)"),
+    ] = None,
 ) -> None:
     """Scan project files to extract facts for .facts/ slots.
 
     Reads config files (pyproject.toml, Dockerfile, docker-compose, package.json, CI)
-    and proposes candidate facts. Review and accept to populate your fact layer.
+    and Markdown documents (README, CLAUDE.md, etc.) to propose candidate facts.
+    Review and accept to populate your fact layer.
     """
     import json as json_mod
+    import os
 
     from fact_layer.core.registry import resolve_facts_dir
     from fact_layer.core.scanner.pipeline import run_scan
@@ -430,11 +444,16 @@ def scan(
 
     project_root = facts_dir.parent
     categories = [c.strip() for c in category.split(",")] if category else None
+    extractor_list = [e.strip() for e in extractor.split(",")] if extractor else None
+    resolved_key = api_key or os.environ.get("ANTHROPIC_API_KEY")
 
     result = run_scan(
         project_root=project_root,
         paths=paths or None,
         categories=categories,
+        extractors=extractor_list,
+        api_key=resolved_key,
+        model=model,
     )
 
     if json_output:
@@ -444,7 +463,7 @@ def scan(
     # --- Summary header ---
     console.print(f"[bold]Scan complete:[/bold] {result.stats.files_scanned} files scanned\n")
 
-    if not result.candidates and not result.conflicts:
+    if not result.candidates and not result.conflicts and not result.unmapped:
         console.print("  No candidates found.")
         raise typer.Exit(0)
 
@@ -470,9 +489,21 @@ def scan(
                 console.print(f"      {c.value:<30} [dim]({c.source})[/dim]")
         console.print()
 
+    # --- Display unmapped facts ---
+    if result.unmapped:
+        console.print(f"  [bold cyan]Unmapped Facts ({len(result.unmapped)}):[/bold cyan]")
+        for u in result.unmapped:
+            console.print(f"    {u.fact}")
+            if u.suggested_category and u.suggested_slot:
+                console.print(f"      [dim]-> {u.suggested_category}.{u.suggested_slot}[/dim]")
+            if u.evidence:
+                console.print(f'      [dim]"{u.evidence}"[/dim]')
+        console.print()
+
     console.print(
         f"  [bold]Summary: {result.stats.candidates_found} candidates"
-        f" · {result.stats.conflicts} conflicts[/bold]"
+        f" · {result.stats.conflicts} conflicts"
+        f" · {result.stats.unmapped} unmapped[/bold]"
     )
 
     if dry_run:

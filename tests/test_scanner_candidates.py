@@ -1,8 +1,12 @@
 # tests/test_scanner_candidates.py
 """Tests for scanner data models."""
 
+from pathlib import Path
+
 from fact_layer.core.scanner.candidates import (
     ConflictGroup,
+    ExtractResult,
+    ScanContext,
     ScanResult,
     ScanStats,
     SlotCandidate,
@@ -78,6 +82,16 @@ class TestUnmappedFact:
             suggested_slot="repo-structure",
         )
         assert u.fact == "Project uses monorepo structure"
+        assert u.evidence == ""
+
+    def test_with_evidence(self):
+        u = UnmappedFact(
+            fact="Uses monorepo",
+            source="README.md:10",
+            evidence="This project is organized as a monorepo",
+        )
+        assert u.evidence == "This project is organized as a monorepo"
+        assert u.suggested_category is None
 
 
 class TestScanResult:
@@ -105,3 +119,59 @@ class TestScanResult:
         d = r.model_dump(mode="json")
         assert len(d["candidates"]) == 1
         assert d["stats"]["files_scanned"] == 1
+
+
+class TestScanContext:
+    def test_defaults(self):
+        ctx = ScanContext()
+        assert ctx.facts_dir is None
+        assert ctx.framework is None
+        assert ctx.categories is None
+        assert ctx.api_key is None
+        assert ctx.model == "claude-sonnet-4-6"
+
+    def test_with_values(self):
+        ctx = ScanContext(
+            facts_dir=Path("/tmp/.facts"),
+            api_key="sk-test",
+            model="claude-haiku-4-5-20251001",
+        )
+        assert ctx.facts_dir == Path("/tmp/.facts")
+        assert ctx.api_key == "sk-test"
+        assert ctx.model == "claude-haiku-4-5-20251001"
+
+
+class TestExtractResult:
+    def test_empty(self):
+        r = ExtractResult()
+        assert r.candidates == []
+        assert r.unmapped == []
+
+    def test_with_candidates(self):
+        c = SlotCandidate(
+            category="tech-stack", slot="language", value="Python 3.12",
+            confidence="high", source="pyproject.toml:3",
+            extractor="config-parser", evidence='requires-python = ">=3.12"',
+        )
+        r = ExtractResult(candidates=[c])
+        assert len(r.candidates) == 1
+        assert r.unmapped == []
+
+    def test_with_unmapped(self):
+        u = UnmappedFact(fact="Uses monorepo", source="README.md:10", evidence="monorepo")
+        r = ExtractResult(unmapped=[u])
+        assert r.candidates == []
+        assert len(r.unmapped) == 1
+
+    def test_json_round_trip(self):
+        c = SlotCandidate(
+            category="tech-stack", slot="language", value="Python 3.12",
+            confidence="high", source="pyproject.toml:3",
+            extractor="config-parser", evidence="test",
+        )
+        u = UnmappedFact(fact="fact", source="src", evidence="ev")
+        r = ExtractResult(candidates=[c], unmapped=[u])
+        d = r.model_dump(mode="json")
+        r2 = ExtractResult.model_validate(d)
+        assert len(r2.candidates) == 1
+        assert len(r2.unmapped) == 1

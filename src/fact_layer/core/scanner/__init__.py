@@ -1,6 +1,8 @@
 # src/fact_layer/core/scanner/__init__.py
 from fact_layer.core.scanner.candidates import (
     ConflictGroup,
+    ExtractResult,
+    ScanContext,
     ScanResult,
     ScanStats,
     SlotCandidate,
@@ -11,6 +13,8 @@ from fact_layer.core.scanner.pipeline import run_scan
 
 __all__ = [
     "ConflictGroup",
+    "ExtractResult",
+    "ScanContext",
     "ScanResult",
     "ScanStats",
     "SlotCandidate",

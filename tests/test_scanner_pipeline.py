@@ -126,3 +126,65 @@ requires-python = ">=3.12"
         result = run_scan(proj, paths=[str(toml), str(df)])
         lang_candidates = [c for c in result.candidates if c.slot == "language"]
         assert len(lang_candidates) <= 1
+
+    def test_extractors_filter_config_only(self, tmp_path: Path):
+        proj = self._init_project(tmp_path)
+        toml = proj / "pyproject.toml"
+        toml.write_text('[project]\nname = "x"\nrequires-python = ">=3.12"\n')
+        readme = proj / "README.md"
+        readme.write_text("# My Project\nUses PostgreSQL.\n")
+        result = run_scan(proj, extractors=["config"])
+        for c in result.candidates:
+            assert c.extractor == "config-parser"
+
+    def test_extractors_filter_markdown_only(self, tmp_path: Path):
+        """When filtering to markdown only, no config candidates should appear."""
+        proj = self._init_project(tmp_path)
+        toml = proj / "pyproject.toml"
+        toml.write_text('[project]\nname = "x"\nrequires-python = ">=3.12"\n')
+        result = run_scan(proj, extractors=["markdown"])
+        assert all(c.extractor != "config-parser" for c in result.candidates)
+
+    def test_markdown_discovery(self, tmp_path: Path):
+        """Markdown files in project root are discovered during auto-scan."""
+        proj = self._init_project(tmp_path)
+        readme = proj / "README.md"
+        readme.write_text("# Hello\n")
+        from fact_layer.core.scanner.pipeline import _discover_files
+
+        files = _discover_files(proj, None, include_markdown=True)
+        assert any(f.suffix == ".md" for f in files)
+
+    def test_markdown_size_limit(self, tmp_path: Path):
+        """Markdown files exceeding size limit are not discovered."""
+        proj = self._init_project(tmp_path)
+        big_md = proj / "huge.md"
+        big_md.write_text("x" * 200_000)
+        from fact_layer.core.scanner.pipeline import _discover_files
+
+        files = _discover_files(proj, None, include_markdown=True)
+        assert big_md not in files
+
+    def test_no_markdown_when_disabled(self, tmp_path: Path):
+        proj = self._init_project(tmp_path)
+        readme = proj / "README.md"
+        readme.write_text("# Hello\n")
+        from fact_layer.core.scanner.pipeline import _discover_files
+
+        files = _discover_files(proj, None, include_markdown=False)
+        assert not any(f.suffix == ".md" for f in files)
+
+    def test_unmapped_in_result(self, tmp_path: Path):
+        """Unmapped facts from extractors appear in ScanResult."""
+        proj = self._init_project(tmp_path)
+        result = run_scan(proj)
+        assert isinstance(result.unmapped, list)
+        assert result.stats.unmapped == len(result.unmapped)
+
+    def test_api_key_passthrough(self, tmp_path: Path):
+        """api_key and model params are accepted without error."""
+        proj = self._init_project(tmp_path)
+        toml = proj / "pyproject.toml"
+        toml.write_text('[project]\nname = "x"\nrequires-python = ">=3.12"\n')
+        result = run_scan(proj, api_key="sk-test", model="claude-haiku-4-5-20251001")
+        assert result.stats.candidates_found >= 1
