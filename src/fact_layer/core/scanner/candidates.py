@@ -64,6 +64,7 @@ class ScanStats(BaseModel):
     candidates_found: int
     conflicts: int
     unmapped: int
+    skipped_files: int = 0
 
 
 class ScanResult(BaseModel):

@@ -424,6 +424,10 @@ def scan(
         Optional[str],
         typer.Option("--extractor", "-e", help="Only use specific extractors (comma-separated: config,markdown)"),
     ] = None,
+    full: Annotated[
+        bool,
+        typer.Option("--full", help="Ignore indexes and rescan all files"),
+    ] = False,
 ) -> None:
     """Scan project files to extract facts for .facts/ slots.
 
@@ -454,6 +458,7 @@ def scan(
         extractors=extractor_list,
         api_key=resolved_key,
         model=model,
+        full=full,
     )
 
     if json_output:
@@ -461,7 +466,8 @@ def scan(
         raise typer.Exit(0)
 
     # --- Summary header ---
-    console.print(f"[bold]Scan complete:[/bold] {result.stats.files_scanned} files scanned\n")
+    skip_info = f", {result.stats.skipped_files} skipped (unchanged)" if result.stats.skipped_files else ""
+    console.print(f"[bold]Scan complete:[/bold] {result.stats.files_scanned} files scanned{skip_info}\n")
 
     if not result.candidates and not result.conflicts and not result.unmapped:
         console.print("  No candidates found.")
@@ -667,17 +673,39 @@ def audit(
         bool,
         typer.Option("--fix", help="Interactively apply fixes from audit findings"),
     ] = False,
+    scan_integrity: Annotated[
+        bool,
+        typer.Option("--scan-integrity", help="Check scan index integrity (no LLM needed)"),
+    ] = False,
 ) -> None:
     """Run an LLM-powered semantic consistency audit across all canonical facts."""
-    from fact_layer.core.auditor import build_audit_prompt, estimate_tokens, run_audit
-    from fact_layer.core.editor import parse_value
     from fact_layer.core.registry import resolve_facts_dir
-    from fact_layer.core.suggest_cmd import Suggestion, apply_suggestion
 
     facts_dir = resolve_facts_dir()
     if not facts_dir:
         console.print("[red]No .facts/ directory found. Run 'fl init' first.[/red]")
         raise typer.Exit(1)
+
+    if scan_integrity:
+        from fact_layer.core.scan_integrity import run_scan_integrity
+
+        result = run_scan_integrity(facts_dir)
+        if not result.findings:
+            console.print("[green]All scan indexes are consistent.[/green]")
+            raise typer.Exit(0)
+
+        for finding in result.findings:
+            icon = "[red]x[/red]" if finding.severity == "error" else "[yellow]![/yellow]"
+            console.print(f"  {icon} [{finding.type}] {finding.description}")
+        console.print(f"\n  [bold]{result.summary}[/bold]")
+
+        if any(f.severity == "error" for f in result.findings):
+            raise typer.Exit(1)
+        return
+
+    from fact_layer.core.auditor import build_audit_prompt, estimate_tokens, run_audit
+    from fact_layer.core.editor import parse_value
+    from fact_layer.core.suggest_cmd import Suggestion, apply_suggestion
 
     prompt = build_audit_prompt(facts_dir)
     token_est = estimate_tokens(prompt)

@@ -137,12 +137,13 @@ def facts_scan(
     extractors: list[str] | None = None,
     model: str = "claude-sonnet-4-6",
     api_key: str | None = None,
+    full: bool = False,
 ) -> dict:
     """Scan project files to extract candidate facts for .facts/ slots.
 
     Extracts from config files (pyproject.toml, Dockerfile, docker-compose,
     package.json, CI) and Markdown documents (README, CLAUDE.md, etc.).
-    Returns candidates, conflicts, and unmapped facts — does NOT write anything.
+    Uses incremental scanning by default — only rescans files whose content changed.
 
     Args:
         paths: File or directory paths to scan. Omit to auto-discover from project root.
@@ -150,6 +151,7 @@ def facts_scan(
         extractors: Only use these extractors (e.g. ["config", "markdown"]). Omit for all.
         model: LLM model for markdown extraction (default: claude-sonnet-4-6).
         api_key: Anthropic API key. Falls back to ANTHROPIC_API_KEY env var.
+        full: Ignore indexes and rescan all files (default: False).
     """
     import os
 
@@ -165,7 +167,22 @@ def facts_scan(
         extractors=extractors,
         api_key=api_key or os.environ.get("ANTHROPIC_API_KEY"),
         model=model,
+        full=full,
     )
+    return result.model_dump(mode="json")
+
+
+@mcp.tool()
+def facts_scan_integrity() -> dict:
+    """Check scan index integrity — orphaned extractions, stale sources, cross-source conflicts.
+
+    Pure rule-based check, no LLM needed.
+    """
+    facts_dir = _require_facts_dir()
+
+    from fact_layer.core.scan_integrity import run_scan_integrity
+
+    result = run_scan_integrity(facts_dir)
     return result.model_dump(mode="json")
 
 

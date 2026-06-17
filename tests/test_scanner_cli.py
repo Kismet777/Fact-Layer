@@ -114,3 +114,34 @@ class TestScanCLI:
         import json
         data = json.loads(result.output)
         assert "unmapped" in data
+
+    def test_scan_full_flag(self, tmp_path: Path, monkeypatch):
+        proj = _setup_project(tmp_path)
+        monkeypatch.chdir(proj)
+        result = runner.invoke(app, ["scan", "--dry-run", "--full"])
+        assert result.exit_code == 0
+
+    def test_scan_incremental_shows_skipped(self, tmp_path: Path, monkeypatch):
+        proj = _setup_project(tmp_path)
+        monkeypatch.chdir(proj)
+        runner.invoke(app, ["scan", "--dry-run"])
+        result = runner.invoke(app, ["scan", "--dry-run"])
+        assert result.exit_code == 0
+        assert "skipped" in result.output.lower()
+
+    def test_audit_scan_integrity(self, tmp_path: Path, monkeypatch):
+        proj = _setup_project(tmp_path)
+        monkeypatch.chdir(proj)
+        result = runner.invoke(app, ["audit", "--scan-integrity"])
+        assert result.exit_code == 0
+        assert "consistent" in result.output.lower()
+
+    def test_scan_json_includes_skipped(self, tmp_path: Path, monkeypatch):
+        proj = _setup_project(tmp_path)
+        monkeypatch.chdir(proj)
+        runner.invoke(app, ["scan", "--dry-run"])
+        result = runner.invoke(app, ["scan", "--dry-run", "--json"])
+        assert result.exit_code == 0
+        import json
+        data = json.loads(result.output)
+        assert "skipped_files" in data["stats"]

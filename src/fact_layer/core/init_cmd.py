@@ -118,6 +118,16 @@ def init_facts_dir(
     canonical_dir = facts_dir / "canonical"
     canonical_dir.mkdir(parents=True, exist_ok=True)
 
+    from fact_layer.core.scanner.indexes import (
+        ExtractionIndex,
+        SourceIndex,
+        save_extraction_index,
+        save_source_index,
+    )
+
+    save_source_index(facts_dir, SourceIndex())
+    save_extraction_index(facts_dir, ExtractionIndex())
+
     framework = _build_framework(project_name, enabled_extensions, enabled_optional)
     with (facts_dir / "framework.yaml").open("w", encoding="utf-8") as f:
         _yaml.dump(framework, f)

@@ -7,7 +7,7 @@ import pytest
 
 from fact_layer.core.init_cmd import init_facts_dir
 from fact_layer.core.writer import dump_yaml
-from fact_layer.mcp_server import facts_scan
+from fact_layer.mcp_server import facts_scan, facts_scan_integrity
 
 
 def _make_slot(value, updated="2026-06-09", verified="2026-06-09"):
@@ -113,3 +113,37 @@ build-backend = "hatchling.build"
         result = facts_scan(paths=[str(toml)])
         assert "unmapped" in result
         assert isinstance(result["unmapped"], list)
+
+    def test_scan_full_flag(self, project_dir: Path):
+        toml = project_dir / "pyproject.toml"
+        toml.write_text('[project]\nname = "x"\nrequires-python = ">=3.12"\n')
+        facts_scan(paths=[str(toml)])
+        result = facts_scan(paths=[str(toml)], full=True)
+        assert result["stats"]["skipped_files"] == 0
+        assert result["stats"]["candidates_found"] >= 1
+
+    def test_scan_incremental_skips(self, project_dir: Path):
+        toml = project_dir / "pyproject.toml"
+        toml.write_text('[project]\nname = "x"\nrequires-python = ">=3.12"\n')
+        facts_scan(paths=[str(toml)])
+        result = facts_scan(paths=[str(toml)])
+        assert result["stats"]["skipped_files"] >= 1
+
+    def test_result_includes_skipped_files(self, project_dir: Path):
+        toml = project_dir / "pyproject.toml"
+        toml.write_text('[project]\nname = "x"\nrequires-python = ">=3.12"\n')
+        result = facts_scan(paths=[str(toml)])
+        assert "skipped_files" in result["stats"]
+
+
+class TestFactsScanIntegrity:
+    def test_integrity_clean(self, project_dir: Path):
+        result = facts_scan_integrity()
+        assert isinstance(result, dict)
+        assert "findings" in result
+        assert "summary" in result
+
+    def test_integrity_no_facts_dir(self, tmp_path: Path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        with pytest.raises(ValueError, match="No .facts/ directory found"):
+            facts_scan_integrity()
