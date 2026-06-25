@@ -186,6 +186,81 @@ def facts_scan_integrity() -> dict:
     return result.model_dump(mode="json")
 
 
+@mcp.tool()
+def facts_eval_log(trace: dict) -> dict:
+    """Write a complete turn trace to .facts/eval/.
+
+    Args:
+        trace: Full trace object with session_id, turn, timestamp, steps, and summary.
+    """
+    facts_dir = _require_facts_dir()
+
+    from fact_layer.core.eval_cmd import save_trace
+    from fact_layer.models.eval import EvalTrace
+
+    parsed = EvalTrace.model_validate(trace)
+    path = save_trace(facts_dir, parsed)
+    return {
+        "status": "ok",
+        "session_id": parsed.session_id,
+        "turn": parsed.turn,
+        "steps_count": len(parsed.steps),
+        "path": path.name,
+    }
+
+
+@mcp.tool()
+def facts_eval_list(
+    session: str | None = None,
+    source: str | None = None,
+    bypassed: bool = False,
+    after: str | None = None,
+) -> list[dict]:
+    """Browse eval traces with optional filtering.
+
+    Args:
+        session: Filter by session ID (supports wildcards like "贷后催收*").
+        source: Only return traces containing this source type (fl/doc/code/db/web/inference).
+        bypassed: Only return traces that contain rule bypasses.
+        after: Only return traces after this date (YYYY-MM-DD format).
+    """
+    facts_dir = _require_facts_dir()
+
+    from fact_layer.core.eval_cmd import load_traces
+
+    traces = load_traces(
+        facts_dir,
+        session=session,
+        source=source,
+        bypassed=bypassed,
+        after=after,
+    )
+    return [t.model_dump(mode="json") for t in traces]
+
+
+@mcp.tool()
+def facts_eval_stats(
+    session: str | None = None,
+    after: str | None = None,
+) -> dict:
+    """Compute aggregate statistics across eval traces.
+
+    Returns FL vs doc ratio, source distribution, bypass details, slot hit ranking,
+    L2 coverage, and timing stats.
+
+    Args:
+        session: Filter by session ID (supports wildcards).
+        after: Only include traces after this date (YYYY-MM-DD format).
+    """
+    facts_dir = _require_facts_dir()
+
+    from fact_layer.core.eval_cmd import compute_eval_stats, load_traces
+
+    traces = load_traces(facts_dir, session=session, after=after)
+    stats = compute_eval_stats(traces)
+    return stats.model_dump(mode="json")
+
+
 def main():
     mcp.run()
 

@@ -659,6 +659,334 @@ def suggest(
             console.print(f"  Post-check: {n_err} errors, {n_warn} warnings.")
 
 
+eval_app = typer.Typer(
+    name="eval",
+    help="Eval trace logging and analysis for measuring FL effectiveness.",
+    no_args_is_help=True,
+)
+app.add_typer(eval_app)
+
+
+@eval_app.command()
+def log(
+    session: Annotated[
+        Optional[str],
+        typer.Option("--session", "-s", help="Session identifier"),
+    ] = None,
+    turn: Annotated[
+        Optional[int],
+        typer.Option("--turn", "-t", help="Turn number"),
+    ] = None,
+    steps: Annotated[
+        Optional[str],
+        typer.Option("--steps", help="Steps as JSON array"),
+    ] = None,
+    summary: Annotated[
+        Optional[str],
+        typer.Option("--summary", help="Summary as JSON object"),
+    ] = None,
+    json_mode: Annotated[
+        bool,
+        typer.Option("--json", help="Input is JSON (default auto-detects)"),
+    ] = False,
+) -> None:
+    """Write a complete turn trace to .facts/eval/.
+
+    Accepts input via --session/--turn/--steps flags, or reads JSON/YAML from stdin.
+    """
+    import json as json_mod
+    import sys
+    from datetime import datetime, timezone
+
+    from fact_layer.core.eval_cmd import save_trace
+    from fact_layer.core.registry import resolve_facts_dir
+    from fact_layer.models.eval import EvalStep, EvalSummary, EvalTrace
+
+    facts_dir = resolve_facts_dir()
+    if not facts_dir:
+        console.print("[red]No .facts/ directory found. Run 'fl init' first.[/red]")
+        raise typer.Exit(1)
+
+    if session and turn is not None and steps:
+        parsed_steps = json_mod.loads(steps)
+        parsed_summary = json_mod.loads(summary) if summary else {}
+        trace = EvalTrace(
+            session_id=session,
+            turn=turn,
+            timestamp=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S"),
+            steps=[EvalStep.model_validate(s) for s in parsed_steps],
+            summary=EvalSummary.model_validate(parsed_summary),
+        )
+    elif not sys.stdin.isatty():
+        raw = sys.stdin.read().strip()
+        try:
+            data = json_mod.loads(raw)
+        except json_mod.JSONDecodeError:
+            from ruamel.yaml import YAML
+
+            yaml = YAML()
+            from io import StringIO
+
+            data = dict(yaml.load(StringIO(raw)))
+        trace = EvalTrace.model_validate(data)
+    else:
+        console.print("[red]Provide --session/--turn/--steps, or pipe JSON/YAML to stdin.[/red]")
+        raise typer.Exit(1)
+
+    path = save_trace(facts_dir, trace)
+    console.print(f"[green]Logged eval trace:[/green] {trace.session_id} turn {trace.turn}")
+    console.print(f"  {len(trace.steps)} steps → {path.name}")
+
+
+@eval_app.command(name="list")
+def list_cmd(
+    session: Annotated[
+        Optional[str],
+        typer.Option("--session", "-s", help="Filter by session (supports wildcards)"),
+    ] = None,
+    source: Annotated[
+        Optional[str],
+        typer.Option("--source", help="Only show traces with this source type"),
+    ] = None,
+    bypassed: Annotated[
+        bool,
+        typer.Option("--bypassed", help="Only show traces with rule bypasses"),
+    ] = False,
+    after: Annotated[
+        Optional[str],
+        typer.Option("--after", help="Only show traces after this date (YYYY-MM-DD)"),
+    ] = None,
+    verbose: Annotated[
+        bool,
+        typer.Option("--verbose", "-v", help="Show step details for each turn"),
+    ] = False,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Output as JSON"),
+    ] = False,
+) -> None:
+    """Browse eval traces by session, with optional filtering."""
+    import json as json_mod
+    from collections import Counter
+
+    from fact_layer.core.eval_cmd import load_traces
+    from fact_layer.core.registry import resolve_facts_dir
+
+    facts_dir = resolve_facts_dir()
+    if not facts_dir:
+        console.print("[red]No .facts/ directory found. Run 'fl init' first.[/red]")
+        raise typer.Exit(1)
+
+    traces = load_traces(
+        facts_dir,
+        session=session,
+        source=source,
+        bypassed=bypassed,
+        after=after,
+    )
+
+    if json_output:
+        print(json_mod.dumps([t.model_dump(mode="json") for t in traces], indent=2, ensure_ascii=False))
+        raise typer.Exit(0)
+
+    if not traces:
+        console.print("No eval traces found.")
+        raise typer.Exit(0)
+
+    by_session: dict[str, list] = {}
+    for t in traces:
+        by_session.setdefault(t.session_id, []).append(t)
+
+    for sess_id, sess_traces in by_session.items():
+        sess_traces.sort(key=lambda t: t.timestamp)
+        date_str = sess_traces[0].timestamp[:10]
+
+        total_sources: Counter[str] = Counter()
+        for t in sess_traces:
+            for step in t.steps:
+                if step.source:
+                    total_sources[step.source] += 1
+
+        source_parts = " / ".join(f"{s} {c}" for s, c in total_sources.most_common())
+        console.print(
+            f"[bold]Session: {sess_id}[/bold]（{date_str}）"
+        )
+        console.print(
+            f"共 {len(sess_traces)} turns，事实来源: {source_parts}"
+        )
+        console.print()
+
+        for t in sess_traces:
+            step_sources = [s.source for s in t.steps if s.source]
+            source_tags = " ".join(step_sources)
+            bypass_warn = ""
+            for s in t.steps:
+                if s.bypassed:
+                    bypass_warn = f"  [yellow]⚠️ bypassed:{s.bypassed.rule}[/yellow]"
+                    break
+
+            time_str = t.timestamp[11:16] if len(t.timestamp) >= 16 else ""
+            tool_summary = ""
+            tools = [s.tool for s in t.steps if s.type == "tool_call" and s.tool]
+            if tools:
+                tool_summary = " + ".join(tools[:3])
+                if len(tools) > 3:
+                    tool_summary += f" +{len(tools)-3}"
+
+            console.print(
+                f"  Turn {t.turn:<3} {time_str}  {source_tags:<20} {tool_summary}{bypass_warn}"
+            )
+
+            if verbose:
+                for s in t.steps:
+                    if s.type == "tool_call":
+                        args_str = ""
+                        if s.args:
+                            args_str = " " + " ".join(f"{k}={v}" for k, v in s.args.items())
+                        source_tag = f" ({s.source})" if s.source else ""
+                        console.print(f"    [dim]\\[tool_call] {s.tool}{args_str}{source_tag}[/dim]")
+                        if s.result_used_for:
+                            console.print(f"      → {s.result_used_for}")
+                    else:
+                        source_tag = f" ({s.source})" if s.source else ""
+                        console.print(f"    [dim]\\[reasoning]{source_tag}[/dim]")
+                        if s.rationale:
+                            console.print(f"      {s.rationale}")
+                        if s.conclusion:
+                            console.print(f"      → {s.conclusion}")
+                    if s.bypassed:
+                        console.print(
+                            f"      [yellow]⚠️ bypassed:{s.bypassed.rule} {s.bypassed.reason}[/yellow]"
+                        )
+                console.print()
+
+        fl_total = total_sources.get("fl", 0)
+        doc_total = total_sources.get("doc", 0)
+        fl_plus_doc = fl_total + doc_total
+        if fl_plus_doc > 0:
+            fl_pct = fl_total * 100 // fl_plus_doc
+            doc_pct = 100 - fl_pct
+            console.print(
+                f"  FL vs 文档: FL {fl_total} ({fl_pct}%) / 文档 {doc_total} ({doc_pct}%)"
+            )
+        console.print()
+
+
+@eval_app.command()
+def stats(
+    session: Annotated[
+        Optional[str],
+        typer.Option("--session", "-s", help="Filter by session (supports wildcards)"),
+    ] = None,
+    after: Annotated[
+        Optional[str],
+        typer.Option("--after", help="Only include traces after this date"),
+    ] = None,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Output as JSON"),
+    ] = False,
+) -> None:
+    """Compute aggregate statistics across eval traces."""
+    import json as json_mod
+
+    from fact_layer.core.eval_cmd import compute_eval_stats, load_traces
+    from fact_layer.core.registry import resolve_facts_dir
+
+    facts_dir = resolve_facts_dir()
+    if not facts_dir:
+        console.print("[red]No .facts/ directory found. Run 'fl init' first.[/red]")
+        raise typer.Exit(1)
+
+    traces = load_traces(facts_dir, session=session, after=after)
+
+    if not traces:
+        console.print("No eval traces found.")
+        raise typer.Exit(0)
+
+    result = compute_eval_stats(traces)
+
+    if json_output:
+        print(json_mod.dumps(result.model_dump(mode="json"), indent=2, ensure_ascii=False))
+        raise typer.Exit(0)
+
+    date_range = ""
+    if after:
+        date_range = f"（{after} ~）"
+    elif traces:
+        first = traces[0].timestamp[:10]
+        last = traces[-1].timestamp[:10]
+        if first != last:
+            date_range = f"（{first} ~ {last}）"
+        else:
+            date_range = f"（{first}）"
+
+    console.print(f"[bold]FL 效果指标{date_range}[/bold]")
+    console.print("───────────────────────────────────")
+    console.print(f"总 turns:          {result.total_turns}")
+    console.print(f"总 steps:         {result.total_steps}")
+
+    console.print()
+    console.print("[bold]核心指标 — 事实获取来源:[/bold]")
+    fl_n = result.fl_vs_doc.get("fl", 0)
+    doc_n = result.fl_vs_doc.get("doc", 0)
+    total_fd = fl_n + doc_n
+    if total_fd > 0:
+        console.print(f"  FL:              {fl_n:>3} 次  ({fl_n*100//total_fd}%)  ← FL 提供")
+        console.print(f"  文档:            {doc_n:>3} 次  ({doc_n*100//total_fd}%)  ← FL 应替代的")
+    else:
+        console.print("  （无 FL/文档来源数据）")
+
+    other_sources = {k: v for k, v in result.sources.items() if k not in ("fl", "doc")}
+    if other_sources:
+        console.print()
+        console.print("[bold]其他工具使用（参考）:[/bold]")
+        labels = {"code": "代码", "db": "数据库", "web": "网络", "inference": "推理"}
+        for src, count in other_sources.items():
+            label = labels.get(src, src)
+            console.print(f"  {label}:            {count:>3} 次")
+
+    if result.bypassed:
+        console.print()
+        total_bypassed = sum(b.count for b in result.bypassed)
+        bp_pct = total_bypassed * 100 // result.total_steps if result.total_steps else 0
+        console.print(f"[bold]规则绕过:[/bold]           {total_bypassed} 次 ({bp_pct:>2}%)")
+        for b in result.bypassed:
+            reason_str = " — " + b.reasons[0] if b.reasons else ""
+            console.print(f"  {b.rule}:   {b.count}{reason_str}")
+
+    if result.slot_hits:
+        console.print()
+        console.print("[bold]FL 槽位命中 Top 5:[/bold]")
+        for hit in result.slot_hits[:5]:
+            console.print(f"  {hit.slot_ref:<35} {hit.count:>3} 次")
+
+    console.print()
+    console.print(
+        f"L2 标注覆盖率:     {result.total_turns and int(result.l2_coverage * result.total_turns) or 0}"
+        f"/{result.total_turns} turns ({int(result.l2_coverage * 100)}%)"
+    )
+
+    if result.timing:
+        console.print()
+        console.print("[bold]过程效率:[/bold]")
+        if result.timing.avg_turn_ms:
+            console.print(f"  平均 turn 耗时:        {result.timing.avg_turn_ms/1000:.1f}s")
+        if result.timing.avg_fl_query_ms is not None:
+            console.print(f"  FL 查询平均耗时:        {result.timing.avg_fl_query_ms/1000:.1f}s")
+        if result.timing.avg_doc_read_ms is not None:
+            console.print(f"  文档查找平均耗时:        {result.timing.avg_doc_read_ms/1000:.1f}s")
+        if result.timing.avg_fl_query_ms and result.timing.avg_doc_read_ms:
+            ratio = result.timing.avg_doc_read_ms / result.timing.avg_fl_query_ms
+            console.print(f"  FL 快了 {ratio:.0f} 倍")
+
+    if result.suggested_slots:
+        console.print()
+        console.print("[bold]待补充槽位建议（基于 bypassed 记录）:[/bold]")
+        for slot in result.suggested_slots:
+            console.print(f"  {slot}")
+
+
 @app.command()
 def audit(
     model: Annotated[
