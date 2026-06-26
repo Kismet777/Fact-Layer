@@ -261,6 +261,67 @@ def facts_eval_stats(
     return stats.model_dump(mode="json")
 
 
+@mcp.tool()
+def facts_set(slot: str, value: str | int | float | bool | list | dict, reason: str | None = None) -> dict:
+    """Set a single slot's value with automatic consistency check.
+
+    Args:
+        slot: Slot reference in 'category.slot-id' format, e.g. 'tech-stack.database'.
+        value: New value for the slot.
+        reason: Optional reason for the change.
+    """
+    facts_dir = _require_facts_dir()
+
+    from fact_layer.core.editor import set_slot
+
+    result = set_slot(facts_dir, slot, value, reason=reason)
+    return result.model_dump(mode="json")
+
+
+@mcp.tool()
+def facts_set_batch(
+    items: list[dict],
+    audit: bool = True,
+    model: str = "claude-haiku-4-5-20251001",
+) -> dict:
+    """Batch-set multiple slot values, then optionally run an audit.
+
+    Each item: {"slot": "category.slot-id", "value": ..., "reason": "..."}.
+    After all writes, an LLM audit checks for contradictions, redundant slots,
+    and missing relationships.
+
+    Args:
+        items: List of slot updates. Each must have 'slot' and 'value'; 'reason' is optional.
+        audit: Run semantic audit after batch write (default: true).
+        model: LLM model for audit (default: claude-haiku-4-5-20251001).
+    """
+    facts_dir = _require_facts_dir()
+
+    from fact_layer.core.editor import BatchSetItem, set_batch
+
+    parsed_items = [BatchSetItem.model_validate(item) for item in items]
+    result = set_batch(facts_dir, parsed_items, audit=audit, audit_model=model)
+    return result.model_dump(mode="json")
+
+
+@mcp.tool()
+def facts_audit(model: str = "claude-haiku-4-5-20251001") -> dict:
+    """Run an LLM-powered semantic consistency audit across all canonical facts.
+
+    Checks for contradictions, staleness, missing facts, redundant slots,
+    and missing dependency relationships.
+
+    Args:
+        model: LLM model to use (default: claude-haiku-4-5-20251001).
+    """
+    facts_dir = _require_facts_dir()
+
+    from fact_layer.core.auditor import run_audit
+
+    result = run_audit(facts_dir, model=model)
+    return result.model_dump(mode="json")
+
+
 def main():
     mcp.run()
 

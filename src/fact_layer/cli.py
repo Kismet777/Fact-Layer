@@ -271,8 +271,14 @@ def export(
 
 @app.command(name="set")
 def set_cmd(
-    slot: Annotated[str, typer.Argument(help="Slot to modify, e.g. tech-stack.database")],
-    value: Annotated[str, typer.Argument(help="New value (string, or JSON for lists/dicts)")],
+    slot: Annotated[
+        Optional[str],
+        typer.Argument(help="Slot to modify, e.g. tech-stack.database"),
+    ] = None,
+    value: Annotated[
+        Optional[str],
+        typer.Argument(help="New value (string, or JSON for lists/dicts)"),
+    ] = None,
     reason: Annotated[
         Optional[str],
         typer.Option("--reason", "-r", help="Reason for the change"),
@@ -281,15 +287,49 @@ def set_cmd(
         bool,
         typer.Option("--json", help="Parse value as JSON"),
     ] = False,
+    batch: Annotated[
+        Optional[str],
+        typer.Option("--batch", "-b", help="Batch input: JSON file path or '-' for stdin"),
+    ] = None,
+    no_audit: Annotated[
+        bool,
+        typer.Option("--no-audit", help="Skip automatic audit after batch set"),
+    ] = False,
+    model: Annotated[
+        str,
+        typer.Option("--model", "-m", help="LLM model for batch audit"),
+    ] = "claude-haiku-4-5-20251001",
 ) -> None:
-    """Set a slot value with automatic metadata update and consistency check."""
-    from fact_layer.core.editor import SetResult, parse_value, set_slot
+    """Set a slot value with automatic metadata update and consistency check.
+
+    Single mode: fl set tech-stack.database "PostgreSQL 17"
+    Batch mode:  fl set --batch input.json
+    """
     from fact_layer.core.registry import resolve_facts_dir
 
     facts_dir = resolve_facts_dir()
     if not facts_dir:
         console.print("[red]No .facts/ directory found. Run 'fl init' first.[/red]")
         raise typer.Exit(1)
+
+    if batch is not None:
+        _set_batch(facts_dir, batch, no_audit=no_audit, model=model)
+    elif slot is not None and value is not None:
+        _set_single(facts_dir, slot, value, reason=reason, json_mode=json_mode)
+    else:
+        console.print("[red]Usage: fl set SLOT VALUE  or  fl set --batch FILE[/red]")
+        raise typer.Exit(1)
+
+
+def _set_single(
+    facts_dir: Path,
+    slot: str,
+    value: str,
+    *,
+    reason: str | None = None,
+    json_mode: bool = False,
+) -> None:
+    from fact_layer.core.editor import parse_value, set_slot
 
     parsed = parse_value(value, force_json=json_mode)
 
@@ -314,6 +354,68 @@ def set_cmd(
         console.print(f"\n  [bold]Check: {len(errors)} errors, {len(warnings)} warnings[/bold]")
         for issue in errors:
             console.print(f"  [red]x[/red] {issue.message}")
+
+
+def _set_batch(
+    facts_dir: Path,
+    batch_source: str,
+    *,
+    no_audit: bool = False,
+    model: str = "claude-haiku-4-5-20251001",
+) -> None:
+    import json as json_mod
+    import sys
+
+    from fact_layer.core.editor import BatchSetItem, set_batch
+
+    if batch_source == "-":
+        raw = sys.stdin.read()
+    else:
+        batch_path = Path(batch_source)
+        if not batch_path.exists():
+            console.print(f"[red]File not found: {batch_source}[/red]")
+            raise typer.Exit(1)
+        raw = batch_path.read_text(encoding="utf-8")
+
+    try:
+        data = json_mod.loads(raw)
+    except json_mod.JSONDecodeError as e:
+        console.print(f"[red]Invalid JSON: {e}[/red]")
+        raise typer.Exit(1)
+
+    if not isinstance(data, list):
+        console.print("[red]Batch input must be a JSON array.[/red]")
+        raise typer.Exit(1)
+
+    items = [BatchSetItem.model_validate(d) for d in data]
+    console.print(f"[bold]Batch set: {len(items)} items[/bold]\n")
+
+    result = set_batch(facts_dir, items, audit=not no_audit, audit_model=model)
+
+    succeeded = 0
+    failed = 0
+    for r in result.results:
+        if r.error:
+            console.print(f"  [red]x[/red] {r.slot_ref}: {r.error}")
+            failed += 1
+        else:
+            console.print(f"  [green]v[/green] {r.slot_ref}: {r.old_value} → {r.new_value}")
+            succeeded += 1
+
+    console.print(f"\n  [bold]{succeeded} succeeded, {failed} failed[/bold]")
+
+    if result.audit and not no_audit:
+        audit = result.audit
+        if audit.error:
+            console.print(f"\n  [yellow]Audit error: {audit.error}[/yellow]")
+        elif audit.findings:
+            console.print(f"\n  [bold]Audit findings ({len(audit.findings)}):[/bold]")
+            for f in audit.findings:
+                console.print(f"    [{f.severity}] {f.type}: {f.description}")
+                if f.suggestion:
+                    console.print(f"      -> {f.suggestion}")
+        else:
+            console.print("\n  [green]Audit: all facts consistent.[/green]")
 
 
 @app.command()

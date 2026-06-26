@@ -13,6 +13,8 @@ from fact_layer.core.impact_cmd import ImpactResult, compute_impact
 from fact_layer.core.loader import load_framework
 from fact_layer.core.registry import get_enabled_categories, resolve_facts_dir
 
+DEFAULT_BATCH_AUDIT_MODEL = "claude-haiku-4-5-20251001"
+
 _yaml = YAML()
 _yaml.preserve_quotes = True
 _yaml.default_flow_style = False
@@ -67,6 +69,18 @@ class SetResult(BaseModel):
     new_value: Any = None
     check_issues: list[CheckIssue] = []
     impact: ImpactResult | None = None
+    error: str | None = None
+
+
+class BatchSetItem(BaseModel):
+    slot: str
+    value: Any
+    reason: str | None = None
+
+
+class BatchSetResult(BaseModel):
+    results: list[SetResult] = []
+    audit: Any | None = None
 
 
 class AddResult(BaseModel):
@@ -210,3 +224,28 @@ def deprecate_slot(
         old_status=old_status,
         impact=impact_result,
     )
+
+
+def set_batch(
+    facts_dir: Path,
+    items: list[BatchSetItem],
+    *,
+    audit: bool = True,
+    audit_model: str = DEFAULT_BATCH_AUDIT_MODEL,
+    api_key: str | None = None,
+) -> BatchSetResult:
+    results: list[SetResult] = []
+    for item in items:
+        try:
+            result = set_slot(facts_dir, item.slot, item.value, reason=item.reason)
+            results.append(result)
+        except (ValueError, KeyError, FileNotFoundError) as e:
+            results.append(SetResult(slot_ref=item.slot, error=str(e)))
+
+    audit_result = None
+    if audit and results:
+        from fact_layer.core.auditor import run_audit
+
+        audit_result = run_audit(facts_dir, model=audit_model, api_key=api_key)
+
+    return BatchSetResult(results=results, audit=audit_result)

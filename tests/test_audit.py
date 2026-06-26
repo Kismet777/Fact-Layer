@@ -177,3 +177,45 @@ class TestParseResponse:
         })
         result = _parse_response(raw)
         assert len(result.findings) == 2
+
+    def test_redundant_finding_type(self):
+        raw = json.dumps({
+            "findings": [{
+                "severity": "warning",
+                "type": "redundant",
+                "slots": ["tech-stack.database", "data-model.database-type"],
+                "description": "These two slots store the same database info.",
+                "suggestion": "Remove one and add a derives-from relationship.",
+            }],
+            "summary": "1 redundant slot",
+        })
+        result = _parse_response(raw)
+        assert len(result.findings) == 1
+        assert result.findings[0].type == "redundant"
+
+    def test_missing_relationship_finding_type(self):
+        raw = json.dumps({
+            "findings": [{
+                "severity": "warning",
+                "type": "missing-relationship",
+                "slots": ["tech-stack.framework", "conventions.naming"],
+                "description": "Framework choice constrains naming conventions.",
+                "suggestion": "Add constrains relationship from tech-stack.framework to conventions.naming.",
+            }],
+            "summary": "1 missing relationship",
+        })
+        result = _parse_response(raw)
+        assert len(result.findings) == 1
+        assert result.findings[0].type == "missing-relationship"
+
+
+class TestPromptNewDimensions:
+    def test_prompt_contains_slot_necessity(self, facts_dir):
+        prompt = build_audit_prompt(facts_dir)
+        assert "Slot necessity" in prompt
+        assert "redundant" in prompt
+
+    def test_prompt_contains_relationship_completeness(self, facts_dir):
+        prompt = build_audit_prompt(facts_dir)
+        assert "Relationship completeness" in prompt
+        assert "missing-relationship" in prompt

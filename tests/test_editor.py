@@ -1,18 +1,22 @@
-"""Tests for fl set / fl add / fl deprecate write commands."""
+"""Tests for fl set / fl add / fl deprecate / fl set --batch write commands."""
 
 from datetime import date
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
 from fact_layer.core.editor import (
     AddResult,
+    BatchSetItem,
+    BatchSetResult,
     DeprecateResult,
     SetResult,
     add_slot,
     deprecate_slot,
     load_yaml_roundtrip,
     parse_value,
+    set_batch,
     set_slot,
 )
 from fact_layer.core.init_cmd import init_facts_dir
@@ -232,3 +236,67 @@ class TestDeprecateSlot:
         assert result.impact is not None
         target_slots = [t.slot for t in result.impact.targets]
         assert "data-model.database-type" in target_slots
+
+
+class TestSetBatch:
+    def _mock_audit(self, *args, **kwargs):
+        from fact_layer.core.auditor import AuditResult
+        return AuditResult(findings=[], summary="All facts are consistent.")
+
+    def test_batch_multiple_success(self, facts_dir):
+        items = [
+            BatchSetItem(slot="tech-stack.database", value="PostgreSQL 17"),
+            BatchSetItem(slot="tech-stack.framework", value="Django 5.0", reason="migration"),
+        ]
+        with patch("fact_layer.core.auditor.run_audit", self._mock_audit):
+            result = set_batch(facts_dir, items)
+
+        assert isinstance(result, BatchSetResult)
+        assert len(result.results) == 2
+        assert result.results[0].new_value == "PostgreSQL 17"
+        assert result.results[1].new_value == "Django 5.0"
+        assert all(r.error is None for r in result.results)
+
+        data = load_yaml_roundtrip(facts_dir / "canonical" / "tech-stack.yaml")
+        assert data["slots"]["database"]["value"] == "PostgreSQL 17"
+        assert data["slots"]["framework"]["value"] == "Django 5.0"
+
+    def test_partial_failure(self, facts_dir):
+        items = [
+            BatchSetItem(slot="tech-stack.database", value="PostgreSQL 17"),
+            BatchSetItem(slot="tech-stack.nonexistent", value="oops"),
+            BatchSetItem(slot="tech-stack.framework", value="Django 5.0"),
+        ]
+        with patch("fact_layer.core.auditor.run_audit", self._mock_audit):
+            result = set_batch(facts_dir, items)
+
+        assert len(result.results) == 3
+        assert result.results[0].error is None
+        assert result.results[1].error is not None
+        assert result.results[2].error is None
+
+    def test_empty_items(self, facts_dir):
+        result = set_batch(facts_dir, [], audit=False)
+        assert isinstance(result, BatchSetResult)
+        assert len(result.results) == 0
+        assert result.audit is None
+
+    def test_audit_triggered(self, facts_dir):
+        items = [BatchSetItem(slot="tech-stack.database", value="PostgreSQL 17")]
+        with patch("fact_layer.core.auditor.run_audit", wraps=self._mock_audit) as mock:
+            result = set_batch(facts_dir, items, audit=True)
+            mock.assert_called_once()
+        assert result.audit is not None
+
+    def test_audit_skipped(self, facts_dir):
+        items = [BatchSetItem(slot="tech-stack.database", value="PostgreSQL 17")]
+        result = set_batch(facts_dir, items, audit=False)
+        assert result.audit is None
+
+    def test_with_reason(self, facts_dir):
+        items = [BatchSetItem(slot="tech-stack.database", value="PostgreSQL 17", reason="LTS")]
+        with patch("fact_layer.core.auditor.run_audit", self._mock_audit):
+            set_batch(facts_dir, items)
+
+        data = load_yaml_roundtrip(facts_dir / "canonical" / "tech-stack.yaml")
+        assert data["slots"]["database"]["meta"]["reason"] == "LTS"
