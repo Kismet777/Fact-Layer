@@ -21,7 +21,11 @@ from fact_layer.core.suggest_cmd import (
 from fact_layer.core.writer import dump_yaml
 
 
-def _slot(value, updated="2026-06-09", verified="2026-06-09", status="active", reason=None):
+def _slot(value, updated=None, verified=None, status="active", reason=None):
+    if updated is None:
+        updated = date.today().isoformat()
+    if verified is None:
+        verified = date.today().isoformat()
     meta = {
         "source": "human", "confidence": "high", "status": status,
         "updated": updated, "verified": verified,

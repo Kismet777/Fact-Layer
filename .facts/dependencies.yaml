@@ -1,0 +1,36 @@
+# fact-layer dependency graph
+# Defines how slots relate to each other.
+# Types: derives-from | constrains | references | implies | conflicts-with
+#
+# When a source slot changes, all targets should be reviewed.
+# "derives-from" means the target MUST be updated.
+# "constrains" means the target should be checked for compatibility.
+# "references" means the target mentions the source.
+# "implies" means a value in the source suggests the target should exist.
+# "conflicts-with" means the two cannot hold certain value combinations.
+
+static:
+- source: tech-stack.language
+  targets:
+  - slot: conventions.naming
+    type: constrains
+  - slot: build-deploy.build-tool
+    type: constrains
+  - slot: testing.framework
+    type: constrains
+
+- source: tech-stack.database
+  targets:
+  - slot: data-model.database-type
+    type: derives-from
+  - slot: build-deploy.docker
+    type: constrains
+
+- source: tech-stack.framework
+  targets:
+  - slot: architecture.style
+    type: constrains
+- source: project-overview.stage
+  targets:
+  - slot: work-in-progress.focus
+    type: references

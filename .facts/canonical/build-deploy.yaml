@@ -1,0 +1,59 @@
+# Build & Deploy — how the project is built, packaged, and deployed
+category: build-deploy
+tier: dynamic
+
+slots:
+  build-tool:
+    value: "hatch"           # e.g. "hatch", "setuptools", "webpack", "cargo"
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: "2026-07-02"
+      verified: "2026-07-02"
+
+      reason: dogfood init
+  docker:
+    value: ""                # e.g. "python:3.12-slim base", "node:20-alpine", "none"
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: "2026-01-01"
+      verified: "2026-01-01"
+
+  ci:
+    value: ""                # e.g. "GitHub Actions", "GitLab CI", "none"
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: "2026-01-01"
+      verified: "2026-01-01"
+
+  deploy-target:
+    value: ""                # e.g. "PyPI", "AWS Lambda", "Kubernetes", "Vercel"
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: "2026-01-01"
+      verified: "2026-01-01"
+
+  release-strategy:
+    value: ""                # e.g. "semver + GitHub releases", "continuous deploy to main"
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: "2026-01-01"
+      verified: "2026-01-01"
+  package_name:
+    value: fact-layer
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: '2026-07-02'
+      verified: '2026-07-02'
+      reason: dogfood init

@@ -1,0 +1,61 @@
+# Architecture — structural decisions
+category: architecture
+tier: stable
+
+slots:
+  style:
+    value: "modular CLI with MCP server extension" # e.g. "monolith", "microservices", "modular-monolith", "cli-tool"
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: "2026-07-02"
+      verified: "2026-07-02"
+
+      reason: dogfood init
+  layers:
+    value: []                # e.g. ["cli", "core", "models", "templates"]
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: "2026-01-01"
+      verified: "2026-01-01"
+
+  key-patterns:
+    value: []                # e.g. ["repository pattern", "event sourcing", "CQRS"]
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: "2026-01-01"
+      verified: "2026-01-01"
+
+  cross-service-contracts:
+    value: []                # External systems this project depends on or provides to
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: "2026-01-01"
+      verified: "2026-01-01"
+  components:
+    value: CLI (typer), MCP server, core 
+      (checker/editor/loader/writer/scanner/auditor/eval), models (pydantic)
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: '2026-07-02'
+      verified: '2026-07-02'
+      reason: dogfood init
+  data_flow:
+    value: 'canonical YAML -> loader -> checker/dependency -> editor -> writer; scan:
+      project files -> extractors -> dedup -> review -> set'
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: '2026-07-02'
+      verified: '2026-07-02'
+      reason: dogfood init

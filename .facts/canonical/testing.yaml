@@ -1,0 +1,50 @@
+# Testing — test strategy and tooling
+category: testing
+tier: dynamic
+
+slots:
+  framework:
+    value: "pytest 8+"       # e.g. "pytest", "jest", "go test"
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: "2026-07-02"
+      verified: "2026-07-02"
+
+      reason: dogfood init
+  strategy:
+    value: ""                # e.g. "unit + integration, no e2e", "TDD", "snapshot tests"
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: "2026-01-01"
+      verified: "2026-01-01"
+
+  commands:
+    value: ""                # e.g. "pytest tests/", "npm test"
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: "2026-01-01"
+      verified: "2026-01-01"
+
+  coverage-target:
+    value: ""                # e.g. "80%", "critical paths only", "none"
+    meta:
+      source: human
+      confidence: medium
+      status: active
+      updated: "2026-01-01"
+      verified: "2026-01-01"
+  coverage_target:
+    value: 376 tests, full coverage on core modules
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: '2026-07-02'
+      verified: '2026-07-02'
+      reason: dogfood init

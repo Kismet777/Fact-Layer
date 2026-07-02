@@ -1,0 +1,105 @@
+# Tech Stack — languages, frameworks, databases, external services
+category: tech-stack
+tier: stable
+
+slots:
+  language:
+    value: "Python 3.12+"    # e.g. "Python 3.12"
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: "2026-07-02"
+      verified: "2026-07-02"
+
+      reason: dogfood init
+  framework:
+    value: ""                # e.g. "FastAPI 0.111"
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: "2026-01-01"
+      verified: "2026-01-01"
+
+  database:
+    value: ""                # e.g. "PostgreSQL 16"
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: "2026-01-01"
+      verified: "2026-01-01"
+      reason: ""             # Why this database was chosen
+
+  package-manager:
+    value: ""                # e.g. "uv", "pip", "poetry"
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: "2026-01-01"
+      verified: "2026-01-01"
+
+  key-libraries:
+    value: []                # e.g. ["pydantic>=2.0", "typer>=0.12"]
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: "2026-01-01"
+      verified: "2026-01-01"
+
+  external-services:
+    value: []                # e.g. ["OpenAI API", "Stripe", "AWS S3"]
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: "2026-01-01"
+      verified: "2026-01-01"
+  package_manager:
+    value: hatch / pip
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: '2026-07-02'
+      verified: '2026-07-02'
+      reason: dogfood init
+  cli_framework:
+    value: typer + rich
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: '2026-07-02'
+      verified: '2026-07-02'
+      reason: dogfood init
+  data_modeling:
+    value: pydantic v2
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: '2026-07-02'
+      verified: '2026-07-02'
+      reason: dogfood init
+  yaml_library:
+    value: ruamel.yaml
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: '2026-07-02'
+      verified: '2026-07-02'
+      reason: dogfood init
+  llm_sdk:
+    value: anthropic + openai (dual backend)
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: '2026-07-02'
+      verified: '2026-07-02'
+      reason: dogfood init

@@ -1,0 +1,59 @@
+# Conventions — coding standards and constraints that guide agent behavior
+category: conventions
+tier: stable
+
+slots:
+  naming:
+    value: "snake_case Python, kebab-case YAML files" # e.g. "snake_case for functions, PascalCase for classes"
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: "2026-07-02"
+      verified: "2026-07-02"
+
+      reason: dogfood init
+  async-convention:
+    value: ""                # e.g. "sync only", "async throughout", "async at API layer"
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: "2026-01-01"
+      verified: "2026-01-01"
+
+  error-handling:
+    value: ""                # e.g. "Custom AppError hierarchy, never bare except"
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: "2026-01-01"
+      verified: "2026-01-01"
+
+  do-not:
+    value: []                # Things agents must NOT do, e.g. ["use ORM", "add global state"]
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: "2026-01-01"
+      verified: "2026-01-01"
+
+  prefer:
+    value: []                # Things agents should prefer, e.g. ["composition over inheritance"]
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: "2026-01-01"
+      verified: "2026-01-01"
+  testing:
+    value: pytest, one test file per module, fixtures for facts_dir
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: '2026-07-02'
+      verified: '2026-07-02'
+      reason: dogfood init

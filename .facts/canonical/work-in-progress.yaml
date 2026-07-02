@@ -1,0 +1,50 @@
+# Work in Progress — current focus and short-term state
+category: work-in-progress
+tier: working
+
+slots:
+  focus:
+    value: "LLM unified call refactoring, test time-bomb fix, dogfood .facts/ init" # What you're working on right now
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: "2026-07-02"
+      verified: "2026-07-02"
+
+      reason: dogfood init
+  next-steps:
+    value: []                # Immediate next actions
+    meta:
+      source: human
+      confidence: medium
+      status: active
+      updated: "2026-01-01"
+      verified: "2026-01-01"
+
+  blockers:
+    value: []                # What's blocking progress
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: "2026-01-01"
+      verified: "2026-01-01"
+
+  recent-changes:
+    value: []                # Notable recent changes for agent context
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: "2026-01-01"
+      verified: "2026-01-01"
+
+  known-issues:
+    value: []                # Known bugs or debt items
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: "2026-01-01"
+      verified: "2026-01-01"

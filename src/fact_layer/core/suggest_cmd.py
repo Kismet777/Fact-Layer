@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.resources
 import json
 import os
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -111,29 +112,18 @@ def run_suggest(
     facts_dir: Path,
     model: str = "claude-sonnet-4-6",
     api_key: str | None = None,
+    today: date | None = None,
 ) -> SuggestResult:
-    check_result = run_check(facts_dir)
+    check_result = run_check(facts_dir, today=today)
     if not check_result.issues:
         return SuggestResult(error="No issues found by fl check. Nothing to suggest.")
-
-    key = api_key or os.environ.get("ANTHROPIC_API_KEY")
-    if not key:
-        return SuggestResult(
-            error="ANTHROPIC_API_KEY not set. Export it or pass --api-key.",
-        )
 
     prompt = build_suggest_prompt(facts_dir, check_result.issues)
 
     try:
-        import anthropic
+        from fact_layer.core.llm import llm_call
 
-        client = anthropic.Anthropic(api_key=key)
-        response = client.messages.create(
-            model=model,
-            max_tokens=2048,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        raw = response.content[0].text
+        raw = llm_call(prompt, model=model, api_key=api_key)
     except Exception as e:
         return SuggestResult(error=f"API call failed: {e}")
 

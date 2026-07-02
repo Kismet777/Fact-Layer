@@ -1,0 +1,62 @@
+# Project Overview — who, what, why
+category: project-overview
+tier: stable
+
+slots:
+  name:
+    value: "fact-layer"      # e.g. "my-awesome-app"
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: "2026-07-02"
+      verified: "2026-07-02"
+
+      reason: dogfood init
+  purpose:
+    value: "Structured consistency-checked project facts CLI for AI coding agents.
+      Preventive architecture: schema guard, index dedup, dependency graph, LLM audit." # One sentence: what problem does this project solve?
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: "2026-07-02"
+      verified: "2026-07-02"
+
+      reason: dogfood init
+  stage:
+    value: "active-development" # e.g. "planning", "active-development", "maintenance", "sunset"
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: "2026-07-02"
+      verified: "2026-07-02"
+
+      reason: dogfood init
+  scope-in:
+    value: []                # What this project IS responsible for
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: "2026-01-01"
+      verified: "2026-01-01"
+
+  scope-out:
+    value: []                # What this project is explicitly NOT responsible for
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: "2026-01-01"
+      verified: "2026-01-01"
+  scope:
+    value: Python CLI (typer) + MCP server, ~370 tests
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: '2026-07-02'
+      verified: '2026-07-02'
+      reason: dogfood init

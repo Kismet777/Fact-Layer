@@ -94,24 +94,12 @@ def run_audit(
     model: str = "claude-sonnet-4-6",
     api_key: str | None = None,
 ) -> AuditResult:
-    key = api_key or os.environ.get("ANTHROPIC_API_KEY")
-    if not key:
-        return AuditResult(
-            error="ANTHROPIC_API_KEY not set. Export it or pass --api-key.",
-        )
-
     prompt = build_audit_prompt(facts_dir)
 
     try:
-        import anthropic
+        from fact_layer.core.llm import llm_call
 
-        client = anthropic.Anthropic(api_key=key)
-        response = client.messages.create(
-            model=model,
-            max_tokens=2048,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        raw = response.content[0].text
+        raw = llm_call(prompt, model=model, api_key=api_key)
     except Exception as e:
         return AuditResult(error=f"API call failed: {e}", raw_response="")
 
@@ -125,9 +113,20 @@ def _parse_response(raw: str) -> AuditResult:
         lines = [l for l in lines if not l.startswith("```")]
         raw = "\n".join(lines).strip()
 
+    data = None
     try:
         data = json.loads(raw)
     except json.JSONDecodeError:
+        import re
+
+        match = re.search(r'\{[\s\S]*"findings"[\s\S]*\}', raw)
+        if match:
+            try:
+                data = json.loads(match.group())
+            except json.JSONDecodeError:
+                pass
+
+    if data is None:
         return AuditResult(
             findings=[],
             summary="",
