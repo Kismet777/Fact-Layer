@@ -89,6 +89,7 @@ def check(
     ] = False,
 ) -> None:
     """Validate all canonical facts for structural integrity, staleness, and dependency consistency."""
+    from fact_layer.core.access_log import log_access
     from fact_layer.core.checker import CheckResult, Severity, run_check
     from fact_layer.core.registry import resolve_facts_dir
 
@@ -97,6 +98,7 @@ def check(
         console.print("[red]No .facts/ directory found. Run 'fl init' first.[/red]")
         raise typer.Exit(1)
 
+    log_access(facts_dir, "check", slot=category, via="cli")
     result = run_check(facts_dir, filter_category=category)
 
     if not result.issues:
@@ -248,6 +250,7 @@ def export(
     ] = None,
 ) -> None:
     """Export all canonical facts as a single markdown snapshot for agent consumption."""
+    from fact_layer.core.access_log import log_access
     from fact_layer.core.exporter import render_export, render_export_budgeted
     from fact_layer.core.registry import resolve_facts_dir
 
@@ -255,6 +258,8 @@ def export(
     if not facts_dir:
         console.print("[red]No .facts/ directory found. Run 'fl init' first.[/red]")
         raise typer.Exit(1)
+
+    log_access(facts_dir, "export", args={"budget": budget} if budget else None, via="cli")
 
     if budget is not None:
         md = render_export_budgeted(facts_dir, budget_tokens=budget)
@@ -858,6 +863,10 @@ def ingest(
         str,
         typer.Option("--model", "-m", help="LLM model for L2 extraction"),
     ] = "deepseek-chat",
+    harness: Annotated[
+        str,
+        typer.Option("--harness", help="Tool/harness that produced the transcript (claude-code/codex)"),
+    ] = "claude-code",
 ) -> None:
     """Rebuild eval trace(s) from a session transcript (FL-018 L2 auto-collection).
 
@@ -868,7 +877,7 @@ def ingest(
     from fact_layer.core.transcript_ingest import ingest_transcript
 
     report = ingest_transcript(
-        transcript, session, only_last_turn=only_last_turn, model=model
+        transcript, session, only_last_turn=only_last_turn, model=model, harness=harness
     )
     written = report.get("written", [])
     skipped = report.get("skipped", [])
@@ -1074,6 +1083,13 @@ def stats(
     console.print(f"总 turns:          {result.total_turns}")
     console.print(f"总 steps:         {result.total_steps}")
 
+    if result.harness_breakdown:
+        harness_labels = {"claude-code": "Claude Code", "codex": "Codex", "unknown": "未知"}
+        parts = " / ".join(
+            f"{harness_labels.get(h, h)} {c}" for h, c in result.harness_breakdown.items()
+        )
+        console.print(f"工具来源:          {parts}")
+
     console.print()
     console.print("[bold]核心指标 — 事实获取来源:[/bold]")
     fl_n = result.fl_vs_doc.get("fl", 0)
@@ -1133,6 +1149,73 @@ def stats(
         console.print("[bold]待补充槽位建议（基于 bypassed 记录）:[/bold]")
         for slot in result.suggested_slots:
             console.print(f"  {slot}")
+
+
+@eval_app.command(name="access-stats")
+def access_stats(
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Output as JSON"),
+    ] = False,
+) -> None:
+    """Show the tool-agnostic FL access log stats (FL-019 L1 backbone).
+
+    Aggregates .facts/eval/access.jsonl — every FL read (get/list/check/export) logged
+    regardless of tool, hook, or transcript. The universal-floor view of fact usage.
+    """
+    import json as json_mod
+
+    from fact_layer.core.access_log import compute_access_stats
+    from fact_layer.core.registry import resolve_facts_dir
+
+    facts_dir = resolve_facts_dir()
+    if not facts_dir:
+        console.print("[red]No .facts/ directory found. Run 'fl init' first.[/red]")
+        raise typer.Exit(1)
+
+    result = compute_access_stats(facts_dir)
+
+    if json_output:
+        print(json_mod.dumps(result.model_dump(mode="json"), indent=2, ensure_ascii=False))
+        raise typer.Exit(0)
+
+    if result.total == 0:
+        console.print("No FL access logged yet (.facts/eval/access.jsonl is empty).")
+        raise typer.Exit(0)
+
+    date_range = ""
+    if result.first_ts and result.last_ts:
+        first = result.first_ts[:10]
+        last = result.last_ts[:10]
+        date_range = f"（{first}）" if first == last else f"（{first} ~ {last}）"
+
+    console.print(f"[bold]FL 访问日志 (L1 底座){date_range}[/bold]")
+    console.print("───────────────────────────────────")
+    console.print(f"总访问次数:        {result.total}")
+
+    if result.by_caller:
+        console.print()
+        console.print("[bold]按工具/harness (FL_CALLER):[/bold]")
+        for caller, count in result.by_caller.items():
+            console.print(f"  {caller:<16} {count:>3} 次")
+
+    if result.by_via:
+        console.print()
+        console.print("[bold]按接口:[/bold]")
+        for via, count in result.by_via.items():
+            console.print(f"  {via:<16} {count:>3} 次")
+
+    if result.by_op:
+        console.print()
+        console.print("[bold]按操作:[/bold]")
+        for op, count in result.by_op.items():
+            console.print(f"  {op:<16} {count:>3} 次")
+
+    if result.top_slots:
+        console.print()
+        console.print("[bold]热点槽位/类别 Top 10:[/bold]")
+        for hit in result.top_slots:
+            console.print(f"  {hit.slot_ref:<35} {hit.count:>3} 次")
 
 
 @app.command()

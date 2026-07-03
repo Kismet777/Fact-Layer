@@ -316,11 +316,14 @@ def _build_summary(steps: list[EvalStep]) -> EvalSummary:
     )
 
 
-def build_trace(session: str, turn_no: int, steps: list[EvalStep]) -> EvalTrace:
+def build_trace(
+    session: str, turn_no: int, steps: list[EvalStep], harness: str = "unknown"
+) -> EvalTrace:
     return EvalTrace(
         session_id=session,
         turn=turn_no,
         timestamp=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S"),
+        harness=harness,
         steps=steps,
         summary=_build_summary(steps),
     )
@@ -337,6 +340,7 @@ def ingest_transcript(
     only_last_turn: bool = True,
     model: str = "deepseek-chat",
     facts_dir: Path | None = None,
+    harness: str = "claude-code",
 ) -> dict:
     """Rebuild eval trace(s) from a transcript. Returns a report dict.
 
@@ -381,7 +385,7 @@ def ingest_transcript(
             for b in bypassed:
                 steps.append(EvalStep(type="reasoning", bypassed=b))
 
-            trace = build_trace(session, turn_no, steps)
+            trace = build_trace(session, turn_no, steps, harness=harness)
             save_trace(facts_dir, trace)
             report["written"].append(turn_no)
         except Exception as e:  # never let one turn break the rest / the caller

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from fastmcp import FastMCP
 
+from fact_layer.core.access_log import log_access
 from fact_layer.core.checker import run_check
 from fact_layer.core.exporter import render_export, render_export_budgeted
 from fact_layer.core.impact_cmd import compute_impact
@@ -30,6 +31,7 @@ def facts_get(slot: str) -> dict:
         slot: Slot reference in 'category.slot-id' format, e.g. 'tech-stack.database'.
     """
     facts_dir = _require_facts_dir()
+    log_access(facts_dir, "get", slot=slot, via="mcp")
 
     parts = slot.split(".", 1)
     if len(parts) != 2:
@@ -60,6 +62,7 @@ def facts_list(category: str) -> list[dict]:
         category: Category name, e.g. 'tech-stack'.
     """
     facts_dir = _require_facts_dir()
+    log_access(facts_dir, "list", slot=category, via="mcp")
 
     categories = load_all_categories(facts_dir)
     cat = categories.get(category)
@@ -85,6 +88,7 @@ def facts_check(category: str | None = None) -> dict:
         category: Optional category name to filter checks. Checks all if omitted.
     """
     facts_dir = _require_facts_dir()
+    log_access(facts_dir, "check", slot=category, via="mcp")
 
     result = run_check(facts_dir, filter_category=category)
     return {
@@ -124,6 +128,7 @@ def facts_export(budget: int | None = None) -> str:
         budget: Optional max token budget. Omit for full export.
     """
     facts_dir = _require_facts_dir()
+    log_access(facts_dir, "export", args={"budget": budget} if budget else None, via="mcp")
 
     if budget is not None:
         return render_export_budgeted(facts_dir, budget_tokens=budget)
@@ -259,6 +264,21 @@ def facts_eval_stats(
     traces = load_traces(facts_dir, session=session, after=after)
     stats = compute_eval_stats(traces)
     return stats.model_dump(mode="json")
+
+
+@mcp.tool()
+def facts_eval_access_stats() -> dict:
+    """Aggregate the tool-agnostic FL access log (.facts/eval/access.jsonl).
+
+    This is the L1 backbone (FL-019): every FL read (get/list/check/export) is logged
+    regardless of tool/hook/transcript. Returns totals by caller, by op, top slots, and
+    the time range — the universal-floor view of who is actually consuming facts.
+    """
+    facts_dir = _require_facts_dir()
+
+    from fact_layer.core.access_log import compute_access_stats
+
+    return compute_access_stats(facts_dir).model_dump(mode="json")
 
 
 @mcp.tool()

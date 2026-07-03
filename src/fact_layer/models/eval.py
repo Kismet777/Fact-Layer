@@ -40,6 +40,10 @@ class EvalTrace(BaseModel):
     session_id: str
     turn: int
     timestamp: str
+    # Which tool/harness produced this turn (claude-code / codex / unknown).
+    # This is the FL-019 "变化的轴" — orthogonal to EvalStep.source (fl/doc/…),
+    # which classifies the *retrieval origin* within a turn.
+    harness: str = "unknown"
     steps: list[EvalStep]
     summary: EvalSummary = Field(default_factory=EvalSummary)
 
@@ -73,3 +77,21 @@ class EvalStats(BaseModel):
     l2_coverage: float
     timing: TimingStats | None = None
     suggested_slots: list[str]
+    # FL-019: per-harness turn counts (claude-code / codex / unknown), most-common first.
+    harness_breakdown: dict[str, int] = Field(default_factory=dict)
+
+
+class AccessStats(BaseModel):
+    """FL-019 L1 backbone: aggregate of the tool-agnostic access log.
+
+    Derived purely from .facts/eval/access.jsonl (FL self-logging on read paths).
+    Independent of transcript-based EvalStats — no LLM, no hook, no transcript needed.
+    """
+
+    total: int
+    by_caller: dict[str, int] = Field(default_factory=dict)  # harness: codex/claude-code/…
+    by_op: dict[str, int] = Field(default_factory=dict)  # get/list/check/export
+    by_via: dict[str, int] = Field(default_factory=dict)  # interface: cli/mcp
+    top_slots: list[SlotHit] = Field(default_factory=list)
+    first_ts: str | None = None
+    last_ts: str | None = None

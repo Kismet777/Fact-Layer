@@ -110,6 +110,7 @@ def compute_eval_stats(traces: list[EvalTrace]) -> EvalStats:
             slot_hits=[],
             l2_coverage=0.0,
             suggested_slots=[],
+            harness_breakdown={},
         )
 
     total_steps = 0
@@ -119,6 +120,7 @@ def compute_eval_stats(traces: list[EvalTrace]) -> EvalStats:
     bypass_counter: Counter[str] = Counter()
     bypass_reasons: dict[str, list[str]] = {}
     slot_counter: Counter[str] = Counter()
+    harness_counter: Counter[str] = Counter()
     turns_with_l2 = 0
     turn_durations: list[int] = []
     fl_durations: list[int] = []
@@ -128,6 +130,7 @@ def compute_eval_stats(traces: list[EvalTrace]) -> EvalStats:
 
     for trace in traces:
         total_steps += len(trace.steps)
+        harness_counter[trace.harness] += 1
 
         has_l2 = False
         for step in trace.steps:
@@ -223,4 +226,5 @@ def compute_eval_stats(traces: list[EvalTrace]) -> EvalStats:
         l2_coverage=l2_coverage,
         timing=timing,
         suggested_slots=suggested_slots,
+        harness_breakdown=dict(harness_counter.most_common()),
     )
