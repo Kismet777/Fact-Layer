@@ -133,7 +133,8 @@ def compute_eval_stats(traces: list[EvalTrace]) -> EvalStats:
         for step in trace.steps:
             if step.source:
                 source_counter[step.source] += 1
-                has_l2 = True
+                # NOTE: source is an L1 signal — it must NOT count as L2 coverage.
+                # Real L2 (rationale/result_used_for/conclusion) is checked below.
                 if step.source == "fl":
                     fl_count += 1
                     if step.duration_ms is not None:
@@ -195,14 +196,21 @@ def compute_eval_stats(traces: list[EvalTrace]) -> EvalStats:
             avg_db_query_ms=sum(db_durations) / len(db_durations) if db_durations else None,
         )
 
+    # suggested_slots must derive ONLY from "missing slot" bypasses (rule 缺槽位) —
+    # NOT from "已有未用" (discoverability) findings, whose reasons also mention "槽位"
+    # ("未引用 FL 的槽位"). Key off the bypass RULE, not fragile reason-text matching.
+    # Dedup reasons (the old logic could append the same reason repeatedly).
     suggested_slots: list[str] = []
+    _seen_reasons: set[str] = set()
     for detail in bypassed_details:
-        if detail.count >= 2:
-            for reason in detail.reasons:
-                if "槽位" in reason or "slot" in reason.lower() or "未覆盖" in reason:
-                    for r in detail.reasons:
-                        suggested_slots.append(r)
-                    break
+        rule_l = detail.rule.lower()
+        is_missing = "缺" in detail.rule or "未覆盖" in detail.rule or "missing" in rule_l
+        if not is_missing:
+            continue
+        for reason in detail.reasons:
+            if reason not in _seen_reasons:
+                _seen_reasons.add(reason)
+                suggested_slots.append(reason)
 
     return EvalStats(
         total_turns=len(traces),

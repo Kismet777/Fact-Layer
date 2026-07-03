@@ -840,6 +840,52 @@ def log(
     console.print(f"  {len(trace.steps)} steps → {path.name}")
 
 
+@eval_app.command()
+def ingest(
+    transcript: Annotated[
+        str,
+        typer.Option("--transcript", help="Path to the session .jsonl transcript"),
+    ],
+    session: Annotated[
+        str,
+        typer.Option("--session", "-s", help="Session id (transcript file stem)"),
+    ],
+    only_last_turn: Annotated[
+        bool,
+        typer.Option("--only-last-turn", help="Only ingest the most recently completed turn"),
+    ] = True,
+    model: Annotated[
+        str,
+        typer.Option("--model", "-m", help="LLM model for L2 extraction"),
+    ] = "deepseek-chat",
+) -> None:
+    """Rebuild eval trace(s) from a session transcript (FL-018 L2 auto-collection).
+
+    Reconstructs L1 tool calls + source classification from the transcript, and layers
+    on L2 (turn rationale/conclusion + bypassed findings) via one LLM call per evaluable
+    turn. Best-effort: L1 is always written; L2 is added when the LLM call succeeds.
+    """
+    from fact_layer.core.transcript_ingest import ingest_transcript
+
+    report = ingest_transcript(
+        transcript, session, only_last_turn=only_last_turn, model=model
+    )
+    written = report.get("written", [])
+    skipped = report.get("skipped", [])
+    no_ret = report.get("no_retrieval", [])
+    errors = report.get("errors", [])
+    if written:
+        console.print(f"[green]Ingested turns:[/green] {written}")
+    if skipped:
+        console.print(f"[dim]Skipped (already ingested): {skipped}[/dim]")
+    if no_ret:
+        console.print(f"[dim]Skipped (no retrieval): {no_ret}[/dim]")
+    if errors:
+        console.print(f"[yellow]Errors:[/yellow] {errors}")
+    if not (written or skipped or no_ret or errors):
+        console.print("[dim]No turns to ingest.[/dim]")
+
+
 @eval_app.command(name="list")
 def list_cmd(
     session: Annotated[
