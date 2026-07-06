@@ -60,6 +60,19 @@ def _slot_display_name(slot_id: str) -> str:
     return slot_id.replace("-", " ").replace("_", " ").title()
 
 
+def _category_sort_key(cat_name: str, tier: str) -> tuple:
+    """Ordering for export sections.
+
+    Known categories follow the curated CATEGORY_ORDER; any enabled
+    extension/custom category not listed there (e.g. user-profile) is appended
+    afterwards, grouped by tier then name — so it is still exported instead of
+    being silently dropped.
+    """
+    if cat_name in CATEGORY_ORDER:
+        return (0, CATEGORY_ORDER.index(cat_name))
+    return (1, TIER_ORDER.get(tier, 99), cat_name)
+
+
 def _extract_active_slots(cat: CategoryFile) -> list[dict]:
     """Extract only active slots with non-empty values."""
     result = []
@@ -114,9 +127,11 @@ def build_export_context(facts_dir: Path, max_decisions: int = 10) -> dict:
     enabled = get_enabled_categories(config)
 
     sections = []
-    for cat_name in CATEGORY_ORDER:
-        if cat_name not in categories or cat_name not in enabled:
-            continue
+    ordered_names = sorted(
+        (name for name in categories if name in enabled),
+        key=lambda n: _category_sort_key(n, categories[n].tier),
+    )
+    for cat_name in ordered_names:
         cat = categories[cat_name]
         title = CATEGORY_TITLES.get(cat_name, _slot_display_name(cat_name))
 

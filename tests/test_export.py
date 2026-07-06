@@ -219,3 +219,112 @@ class TestRenderExport:
     def test_empty_project_still_renders(self, empty_facts):
         md = render_export(empty_facts)
         assert "# Project Facts Snapshot" in md
+
+
+class TestEnabledCategoryCoverage:
+    """FL-020: export must cover every enabled category, not just a hardcoded list."""
+
+    def _populate(self, tmp_path: Path, extension: str, canonical: dict) -> Path:
+        project = tmp_path / f"proj-{extension}"
+        project.mkdir()
+        init_facts_dir(
+            target=project,
+            project_name="demo",
+            language="Python",
+            enabled_extensions=[extension],
+            enabled_optional=[],
+        )
+        facts_dir = project / ".facts"
+        dump_yaml(facts_dir / "canonical" / f"{extension}.yaml", canonical)
+        return facts_dir
+
+    def test_custom_extension_exported(self, tmp_path):
+        """The reported bug: a project-defined custom extension (e.g. user-profile,
+        which ships no package template and is absent from CATEGORY_ORDER) was
+        enabled + populated but silently dropped from export.
+
+        Reproduce faithfully: register the custom extension in framework.yaml, then
+        assert it appears with a fallback title derived from the category name.
+        """
+        from fact_layer.core.loader import _load_yaml
+
+        project = tmp_path / "proj-custom"
+        project.mkdir()
+        init_facts_dir(
+            target=project,
+            project_name="demo",
+            language="Python",
+            enabled_extensions=[],
+            enabled_optional=[],
+        )
+        facts_dir = project / ".facts"
+
+        framework = _load_yaml(facts_dir / "framework.yaml")
+        framework["extensions"]["available"]["user-profile"] = {
+            "file": "user-profile.yaml",
+            "tier": "dynamic",
+            "required_slots": [],
+        }
+        framework["extensions"]["enabled"] = ["user-profile"]
+        dump_yaml(facts_dir / "framework.yaml", framework)
+
+        dump_yaml(
+            facts_dir / "canonical" / "user-profile.yaml",
+            {
+                "category": "user-profile",
+                "tier": "dynamic",
+                "slots": {
+                    "derived-scores": {
+                        "value": ["willingness_score", "contactability_score"],
+                        "meta": {
+                            "source": "human",
+                            "confidence": "high",
+                            "status": "active",
+                            "updated": "2026-06-09",
+                            "verified": "2026-06-09",
+                        },
+                    },
+                },
+            },
+        )
+
+        ctx = build_export_context(facts_dir)
+        assert "user-profile" in {s["category"] for s in ctx["sections"]}
+        md = render_export(facts_dir)
+        assert "## User Profile" in md  # fallback title from _slot_display_name
+        assert "willingness_score" in md
+
+    def test_category_absent_from_order_still_exported(self, tmp_path, monkeypatch):
+        """Root cause: iteration is over enabled categories, not CATEGORY_ORDER.
+
+        Removing a category from CATEGORY_ORDER must not drop it from the export.
+        """
+        from fact_layer.core import exporter
+
+        facts_dir = self._populate(
+            tmp_path,
+            "data-model",
+            {
+                "category": "data-model",
+                "tier": "dynamic",
+                "slots": {
+                    "database-type": {
+                        "value": "MySQL 8",
+                        "meta": {
+                            "source": "human",
+                            "confidence": "high",
+                            "status": "active",
+                            "updated": "2026-06-09",
+                            "verified": "2026-06-09",
+                        },
+                    },
+                },
+            },
+        )
+        monkeypatch.setattr(
+            exporter,
+            "CATEGORY_ORDER",
+            [c for c in exporter.CATEGORY_ORDER if c != "data-model"],
+        )
+        ctx = build_export_context(facts_dir)
+        assert "data-model" in {s["category"] for s in ctx["sections"]}
