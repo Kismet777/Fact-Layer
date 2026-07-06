@@ -848,13 +848,17 @@ def log(
 @eval_app.command()
 def ingest(
     transcript: Annotated[
-        str,
-        typer.Option("--transcript", help="Path to the session .jsonl transcript"),
-    ],
+        str | None,
+        typer.Option("--transcript", help="Path to the session .jsonl transcript (Codex: optional, auto-located from --session/newest)"),
+    ] = None,
     session: Annotated[
+        str | None,
+        typer.Option("--session", "-s", help="Session id (Claude: transcript stem; Codex: rollout uuid)"),
+    ] = None,
+    tool: Annotated[
         str,
-        typer.Option("--session", "-s", help="Session id (transcript file stem)"),
-    ],
+        typer.Option("--tool", help="Which harness's transcript: claude|codex"),
+    ] = "claude",
     only_last_turn: Annotated[
         bool,
         typer.Option("--only-last-turn", help="Only ingest the most recently completed turn"),
@@ -864,21 +868,40 @@ def ingest(
         typer.Option("--model", "-m", help="LLM model for L2 extraction"),
     ] = "deepseek-chat",
     harness: Annotated[
-        str,
-        typer.Option("--harness", help="Tool/harness that produced the transcript (claude-code/codex)"),
-    ] = "claude-code",
+        str | None,
+        typer.Option("--harness", help="Tool/harness label stored on the trace; defaults from --tool"),
+    ] = None,
 ) -> None:
-    """Rebuild eval trace(s) from a session transcript (FL-018 L2 auto-collection).
+    """Rebuild eval trace(s) from a session transcript (FL-018/019 L2 auto-collection).
 
     Reconstructs L1 tool calls + source classification from the transcript, and layers
     on L2 (turn rationale/conclusion + bypassed findings) via one LLM call per evaluable
     turn. Best-effort: L1 is always written; L2 is added when the LLM call succeeds.
-    """
-    from fact_layer.core.transcript_ingest import ingest_transcript
 
-    report = ingest_transcript(
-        transcript, session, only_last_turn=only_last_turn, model=model, harness=harness
-    )
+    --tool claude reads a Claude Code transcript (~/.claude/projects/<enc>/<sid>.jsonl);
+    --tool codex reads a Codex rollout (~/.codex/sessions/**/rollout-*.jsonl), auto-locating
+    the file and its project's .facts/ from the rollout's session_meta when omitted.
+    """
+    tool = tool.lower()
+    if tool == "codex":
+        from fact_layer.core.codex_ingest import ingest_rollout
+
+        report = ingest_rollout(
+            transcript, session,
+            only_last_turn=only_last_turn, model=model,
+            harness=harness or "codex",
+        )
+    else:
+        from fact_layer.core.transcript_ingest import ingest_transcript
+
+        if not transcript or not session:
+            console.print("[red]--tool claude requires --transcript and --session.[/red]")
+            raise typer.Exit(1)
+        report = ingest_transcript(
+            transcript, session,
+            only_last_turn=only_last_turn, model=model,
+            harness=harness or "claude-code",
+        )
     written = report.get("written", [])
     skipped = report.get("skipped", [])
     no_ret = report.get("no_retrieval", [])

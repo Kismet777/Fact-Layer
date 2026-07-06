@@ -256,20 +256,25 @@ _L2_PROMPT = """你在分析一次 AI agent 的单个 turn，判断它的信息�
 
 
 def extract_l2(
-    segment_rows: list[dict],
-    user_record: dict,
+    user_prompt: str,
+    reasoning: str,
     steps: list[EvalStep],
     facts_dir: Path,
     model: str,
 ) -> tuple[str | None, str | None, list[BypassInfo]]:
-    """One LLM call → (turn_rationale, conclusion, bypassed). Best-effort; ('',[]) on failure."""
+    """One LLM call → (turn_rationale, conclusion, bypassed). Best-effort; ('',[]) on failure.
+
+    Schema-agnostic: callers extract the plaintext user prompt + reasoning narrative from
+    their own transcript format (Claude thinking/text blocks, Codex agent_message/summary),
+    so this L2 stage is shared across harnesses.
+    """
     try:
         fl_export = render_export_budgeted(facts_dir, budget_tokens=3000)
     except Exception:
         fl_export = "(无法加载 FL 导出)"
     prompt = _L2_PROMPT.format(
-        user_prompt=_message_text(user_record).strip()[:1500] or "(空)",
-        reasoning=_gather_reasoning(segment_rows) or "(无推理记录)",
+        user_prompt=(user_prompt or "").strip()[:1500] or "(空)",
+        reasoning=reasoning or "(无推理记录)",
         tool_seq=_tool_sequence(steps) or "(无工具调用)",
         fl_export=fl_export[:6000],
     )
@@ -375,8 +380,10 @@ def ingest_transcript(
                 report["no_retrieval"].append(turn_no)
                 continue
 
+            user_prompt = _message_text(user_record).strip()
+            reasoning = _gather_reasoning(segment_rows)
             rationale, conclusion, bypassed = extract_l2(
-                segment_rows, user_record, steps, facts_dir, model
+                user_prompt, reasoning, steps, facts_dir, model
             )
             if rationale or conclusion:
                 steps.append(
