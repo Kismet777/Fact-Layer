@@ -314,7 +314,9 @@ class TestComputeStats:
             _make_trace(
                 turn=1,
                 timestamp="2026-06-25T14:30:00",
-                steps=[{"type": "tool_call", "tool": "facts_get", "source": "fl"}],
+                # L2 coverage requires a real semantic field (rationale/result_used_for/
+                # conclusion); source alone is an L1 signal and does NOT count (FL-018).
+                steps=[{"type": "tool_call", "tool": "facts_get", "source": "fl", "result_used_for": "确认数据库类型"}],
             ),
             _make_trace(
                 turn=2,
@@ -347,14 +349,14 @@ class TestComputeStats:
                 turn=1,
                 timestamp="2026-06-25T14:30:00",
                 steps=[
-                    {"type": "reasoning", "source": "doc", "bypassed": {"rule": "A1", "reason": "FL 未覆盖该槽位 attitude"}},
+                    {"type": "reasoning", "source": "doc", "bypassed": {"rule": "缺槽位", "reason": "FL 未覆盖该槽位 attitude"}},
                 ],
             ),
             _make_trace(
                 turn=2,
                 timestamp="2026-06-25T14:31:00",
                 steps=[
-                    {"type": "reasoning", "source": "doc", "bypassed": {"rule": "A1", "reason": "FL 未覆盖该槽位 attitude"}},
+                    {"type": "reasoning", "source": "doc", "bypassed": {"rule": "缺槽位", "reason": "FL 未覆盖该槽位 attitude"}},
                 ],
             ),
         ]
