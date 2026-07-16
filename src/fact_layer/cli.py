@@ -248,10 +248,18 @@ def export(
         Optional[int],
         typer.Option("--budget", "-b", help="Max token budget for smart truncation"),
     ] = None,
+    since: Annotated[
+        Optional[str],
+        typer.Option("--since", help="Watermark token from a prior export (delta mode)"),
+    ] = None,
 ) -> None:
     """Export all canonical facts as a single markdown snapshot for agent consumption."""
     from fact_layer.core.access_log import log_access
-    from fact_layer.core.exporter import render_export, render_export_budgeted
+    from fact_layer.core.exporter import (
+        render_export,
+        render_export_budgeted,
+        render_export_delta,
+    )
     from fact_layer.core.registry import resolve_facts_dir
 
     facts_dir = resolve_facts_dir()
@@ -259,9 +267,16 @@ def export(
         console.print("[red]No .facts/ directory found. Run 'fl init' first.[/red]")
         raise typer.Exit(1)
 
-    log_access(facts_dir, "export", args={"budget": budget} if budget else None, via="cli")
+    log_access(
+        facts_dir,
+        "export",
+        args={k: v for k, v in {"budget": budget, "since": since}.items() if v} or None,
+        via="cli",
+    )
 
-    if budget is not None:
+    if since is not None:
+        md = render_export_delta(facts_dir, since)
+    elif budget is not None:
         md = render_export_budgeted(facts_dir, budget_tokens=budget)
     else:
         md = render_export(facts_dir)

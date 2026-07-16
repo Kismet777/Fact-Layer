@@ -6,7 +6,11 @@ from fastmcp import FastMCP
 
 from fact_layer.core.access_log import log_access
 from fact_layer.core.checker import run_check
-from fact_layer.core.exporter import render_export, render_export_budgeted
+from fact_layer.core.exporter import (
+    render_export,
+    render_export_budgeted,
+    render_export_delta,
+)
 from fact_layer.core.impact_cmd import compute_impact
 from fact_layer.core.loader import load_all_categories
 from fact_layer.core.registry import resolve_facts_dir
@@ -121,15 +125,28 @@ def facts_status() -> dict:
 
 
 @mcp.tool()
-def facts_export(budget: int | None = None) -> str:
+def facts_export(budget: int | None = None, since: str | None = None) -> str:
     """Export facts as a markdown snapshot for agent consumption.
+
+    Every export ends with an `fl-watermark:` token. To avoid re-reading the
+    same content across turns, pass that token back as `since`: you then get
+    only the facts changed since, or a tiny "no changes" note if nothing moved.
 
     Args:
         budget: Optional max token budget. Omit for full export.
+        since: Optional watermark token from a previous export (delta mode).
+            Takes precedence over budget.
     """
     facts_dir = _require_facts_dir()
-    log_access(facts_dir, "export", args={"budget": budget} if budget else None, via="mcp")
+    log_access(
+        facts_dir,
+        "export",
+        args={k: v for k, v in {"budget": budget, "since": since}.items() if v} or None,
+        via="mcp",
+    )
 
+    if since is not None:
+        return render_export_delta(facts_dir, since)
     if budget is not None:
         return render_export_budgeted(facts_dir, budget_tokens=budget)
     return render_export(facts_dir)

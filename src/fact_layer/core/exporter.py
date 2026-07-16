@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import hashlib
 import importlib.resources
+import json
 from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -73,11 +75,19 @@ def _category_sort_key(cat_name: str, tier: str) -> tuple:
     return (1, TIER_ORDER.get(tier, 99), cat_name)
 
 
-def _extract_active_slots(cat: CategoryFile) -> list[dict]:
-    """Extract only active slots with non-empty values."""
+def _extract_active_slots(cat: CategoryFile, changed_since: date | None = None) -> list[dict]:
+    """Extract only active slots with non-empty values.
+
+    When ``changed_since`` is set, only slots whose ``meta.updated`` is on or
+    after that date are kept (delta export). ``>=`` is deliberate: it never
+    misses a same-date change, at the cost of possibly re-including items that
+    already sat at the caller's watermark date.
+    """
     result = []
     for slot_id, slot_val in cat.slots.items():
         if slot_val.meta.status not in ACTIVE_STATUSES:
+            continue
+        if changed_since is not None and slot_val.meta.updated < changed_since:
             continue
         raw = slot_val.value
         if is_empty_value(raw):
@@ -97,11 +107,15 @@ def _extract_active_slots(cat: CategoryFile) -> list[dict]:
     return result
 
 
-def _extract_decisions(cat: CategoryFile, max_count: int = 10) -> list[dict]:
+def _extract_decisions(
+    cat: CategoryFile, max_count: int = 10, changed_since: date | None = None
+) -> list[dict]:
     """Extract active decisions in a compact format."""
     decisions = []
     for slot_id, slot_val in cat.slots.items():
         if slot_val.meta.status not in ACTIVE_STATUSES:
+            continue
+        if changed_since is not None and slot_val.meta.updated < changed_since:
             continue
         raw = slot_val.value
         if not raw or not isinstance(raw, dict):
@@ -121,8 +135,14 @@ def _extract_decisions(cat: CategoryFile, max_count: int = 10) -> list[dict]:
     return decisions[:max_count]
 
 
-def build_export_context(facts_dir: Path, max_decisions: int = 10) -> dict:
-    """Build the template context dict from .facts/ directory."""
+def build_export_context(
+    facts_dir: Path, max_decisions: int = 10, changed_since: date | None = None
+) -> dict:
+    """Build the template context dict from .facts/ directory.
+
+    ``changed_since`` restricts sections to slots updated on/after that date
+    (delta export). Sections that end up empty after filtering are dropped.
+    """
     config = load_framework(facts_dir)
     categories = load_all_categories(facts_dir)
     enabled = get_enabled_categories(config)
@@ -137,7 +157,7 @@ def build_export_context(facts_dir: Path, max_decisions: int = 10) -> dict:
         title = CATEGORY_TITLES.get(cat_name, _slot_display_name(cat_name))
 
         if cat_name == "decisions":
-            decisions = _extract_decisions(cat, max_decisions)
+            decisions = _extract_decisions(cat, max_decisions, changed_since)
             if not decisions:
                 continue
             sections.append({
@@ -148,7 +168,7 @@ def build_export_context(facts_dir: Path, max_decisions: int = 10) -> dict:
                 "decisions": decisions,
             })
         else:
-            slots = _extract_active_slots(cat)
+            slots = _extract_active_slots(cat, changed_since)
             if not slots:
                 continue
             sections.append({
@@ -167,9 +187,107 @@ def build_export_context(facts_dir: Path, max_decisions: int = 10) -> dict:
 
 
 def render_export(facts_dir: Path, max_decisions: int = 10) -> str:
-    """Render the full markdown export."""
+    """Render the full markdown export (bootstrap snapshot + watermark)."""
     ctx = build_export_context(facts_dir, max_decisions)
-    return _render_context(ctx)
+    return _render_context(ctx) + _watermark_trailer(facts_dir)
+
+
+# ---------------------------------------------------------------------------
+# Watermark / delta export — kills repeated full-export context pollution.
+#
+# Stateless: FL stores no per-caller cursor. The caller keeps the watermark
+# token from its last export and passes it back. token = "<max_updated>:<hash8>".
+#   - hash8 answers "did anything change at all" (robust, no date granularity);
+#   - the date drives the delta filter (coarse but never misses).
+# ---------------------------------------------------------------------------
+
+
+def _active_slot_items(facts_dir: Path) -> tuple[list[tuple[str, str]], date | None]:
+    """Sorted [(slot_ref, json(value))] over active non-empty slots + max updated."""
+    config = load_framework(facts_dir)
+    categories = load_all_categories(facts_dir)
+    enabled = get_enabled_categories(config)
+    items: list[tuple[str, str]] = []
+    max_updated: date | None = None
+    for cat_name, cat in categories.items():
+        if cat_name not in enabled:
+            continue
+        for slot_id, sv in cat.slots.items():
+            if sv.meta.status not in ACTIVE_STATUSES:
+                continue
+            if is_empty_value(sv.value):
+                continue
+            blob = json.dumps(sv.value, sort_keys=True, ensure_ascii=False, default=str)
+            items.append((f"{cat_name}.{slot_id}", blob))
+            if max_updated is None or sv.meta.updated > max_updated:
+                max_updated = sv.meta.updated
+    items.sort()
+    return items, max_updated
+
+
+def compute_watermark(facts_dir: Path) -> str:
+    """Content watermark over active facts: '<max_updated_date>:<sha8>'.
+
+    The hash covers slot values only (not verified/updated dates), so it flips
+    exactly when the facts' content changes.
+    """
+    items, max_updated = _active_slot_items(facts_dir)
+    blob = "\n".join(f"{ref}={val}" for ref, val in items)
+    digest = hashlib.sha256(blob.encode("utf-8")).hexdigest()[:8]
+    date_part = max_updated.isoformat() if max_updated else "none"
+    return f"{date_part}:{digest}"
+
+
+def _parse_watermark(token: str) -> tuple[date | None, str] | None:
+    """Parse '<date>:<hash>' → (since_date, hash). None if malformed."""
+    if not token or ":" not in token:
+        return None
+    date_str, _, digest = token.rpartition(":")
+    if not digest or not date_str:
+        return None
+    since_date: date | None = None
+    if date_str != "none":
+        try:
+            since_date = date.fromisoformat(date_str)
+        except ValueError:
+            return None
+    return since_date, digest
+
+
+def _watermark_trailer(facts_dir: Path) -> str:
+    return f"\n---\nfl-watermark: {compute_watermark(facts_dir)}\n"
+
+
+def render_export_delta(facts_dir: Path, since_token: str, max_decisions: int = 10) -> str:
+    """Render only what changed since the caller's watermark token.
+
+    - malformed token → safe fallback to a full export;
+    - nothing changed (hash match) → a tiny "no changes" note (+ new watermark);
+    - otherwise → sections filtered to slots updated on/after the token's date.
+    """
+    parsed = _parse_watermark(since_token)
+    if parsed is None:
+        return render_export(facts_dir, max_decisions)
+
+    since_date, since_hash = parsed
+    cur_token = compute_watermark(facts_dir)
+    cur_hash = cur_token.rpartition(":")[2]
+    since_str = since_date.isoformat() if since_date else "start"
+
+    if since_hash == cur_hash:
+        items, _ = _active_slot_items(facts_dir)
+        return (
+            "# Project Facts — Delta\n\n"
+            f"No fact changes since {since_str} ({len(items)} active facts unchanged).\n\n"
+            f"---\nfl-watermark: {cur_token}\n"
+        )
+
+    ctx = build_export_context(facts_dir, max_decisions, changed_since=since_date)
+    banner = (
+        f"> Delta since {since_str}. Older unchanged facts omitted; "
+        "pass the watermark below as `since` next time.\n\n"
+    )
+    return banner + _render_context(ctx) + f"\n---\nfl-watermark: {cur_token}\n"
 
 
 def _render_context(ctx: dict) -> str:
@@ -340,4 +458,4 @@ def render_export_budgeted(
     md = _render_context(ctx)
     if omitted > 0:
         md += f"\n[truncated: {omitted} items omitted due to token budget]\n"
-    return md
+    return md + _watermark_trailer(facts_dir)
