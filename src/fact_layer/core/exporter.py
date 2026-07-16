@@ -86,6 +86,7 @@ def _extract_active_slots(cat: CategoryFile) -> list[dict]:
         if not formatted:
             continue
         entry: dict[str, Any] = {
+            "slot_id": slot_id,
             "name": _slot_display_name(slot_id),
             "value": formatted,
             "is_list": isinstance(raw, (list, dict)),
@@ -251,8 +252,11 @@ def build_budgeted_context(
 
         slot_scores: list[tuple[float, dict]] = []
         for slot_dict in section.get("slots", []):
-            display_name = slot_dict["name"]
-            slot_id = display_name.lower().replace(" ", "-")
+            # Use the real slot_id carried by _extract_active_slots. Reverse-
+            # engineering it from the display name loses the original separator
+            # (e.g. underscores render as spaces, then round-trip to hyphens),
+            # so underscore slot_ids failed the lookup → updated=None → wrong score.
+            slot_id = slot_dict["slot_id"]
             slot_ref = f"{cat_name}.{slot_id}"
             updated = None
             if cat and slot_id in cat.slots:

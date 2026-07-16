@@ -5,6 +5,7 @@ import pytest
 from fact_layer.core.init_cmd import init_facts_dir
 from fact_layer.core.writer import dump_yaml
 from fact_layer.mcp_server import (
+    facts_add,
     facts_check,
     facts_export,
     facts_get,
@@ -116,6 +117,30 @@ class TestFactsGet:
     def test_missing_slot_raises(self, facts_dir):
         with pytest.raises(ValueError, match="not found"):
             facts_get(slot="tech-stack.nonexistent")
+
+
+class TestFactsAdd:
+    def test_creates_new_slot(self, facts_dir):
+        result = facts_add(
+            category="data-model",
+            slot_id="enum-status",
+            value={"values": ["open", "closed"]},
+            reason="new enum",
+        )
+        assert result["category"] == "data-model"
+        assert result["slot_id"] == "enum-status"
+        # New slot is now queryable via facts_get.
+        got = facts_get(slot="data-model.enum-status")
+        assert got["value"] == {"values": ["open", "closed"]}
+        assert got["meta"]["reason"] == "new enum"
+
+    def test_duplicate_slot_raises(self, facts_dir):
+        with pytest.raises(KeyError, match="already exists"):
+            facts_add(category="tech-stack", slot_id="database", value="MySQL")
+
+    def test_unenabled_category_raises(self, facts_dir):
+        with pytest.raises((ValueError, KeyError, FileNotFoundError)):
+            facts_add(category="security", slot_id="policy", value="x")
 
 
 class TestFactsList:

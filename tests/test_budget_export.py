@@ -16,7 +16,7 @@ from fact_layer.core.init_cmd import init_facts_dir
 from fact_layer.core.loader import load_dependencies
 from fact_layer.core.writer import dump_yaml
 
-from datetime import date
+from datetime import date, timedelta
 
 
 def _slot(value, updated="2026-06-09", verified="2026-06-09", reason=None):
@@ -189,3 +189,59 @@ class TestBudgetExport:
     def test_zero_omitted_for_large_budget(self, facts_dir):
         _, omitted = build_budgeted_context(facts_dir, budget_tokens=100000)
         assert omitted == 0
+
+
+class TestUnderscoreSlotRecency:
+    """Regression: budgeted export must score underscore slot_ids by their real
+    recency. It used to reverse-engineer slot_id from the display name, turning
+    underscores into hyphens, so the lookup failed and updated became None."""
+
+    def _minimal_dir(self, tmp_path: Path) -> Path:
+        proj = tmp_path / "us-proj"
+        proj.mkdir()
+        init_facts_dir(
+            target=proj,
+            project_name="us",
+            language="Python 3.12",
+            enabled_extensions=["data-model"],
+            enabled_optional=[],
+        )
+        facts = proj / ".facts"
+        dump_yaml(facts / "canonical" / "project-overview.yaml", {
+            "category": "project-overview", "tier": "stable",
+            "slots": {"name": _slot("p"), "purpose": _slot("q"), "stage": _slot("r")},
+        })
+        dump_yaml(facts / "canonical" / "tech-stack.yaml", {
+            "category": "tech-stack", "tier": "stable",
+            "slots": {"language": _slot("Py")},
+        })
+        dump_yaml(facts / "canonical" / "architecture.yaml", {
+            "category": "architecture", "tier": "stable", "slots": {"style": _slot("m")},
+        })
+        dump_yaml(facts / "canonical" / "conventions.yaml", {
+            "category": "conventions", "tier": "stable", "slots": {},
+        })
+        dump_yaml(facts / "canonical" / "work-in-progress.yaml", {
+            "category": "work-in-progress", "tier": "working", "slots": {},
+        })
+        return facts
+
+    def test_fresh_underscore_beats_stale_hyphen(self, tmp_path: Path):
+        facts = self._minimal_dir(tmp_path)
+        today = date.today()
+        fresh = today.isoformat()
+        stale = (today - timedelta(days=5)).isoformat()
+        # Two big, equal-size slots in the same category+tier. Only one fits the
+        # budget. The fresh one must win on recency (+10 vs +5). With the old bug
+        # the underscore slot's updated resolved to None (recency 0) and lost.
+        dump_yaml(facts / "canonical" / "data-model.yaml", {
+            "category": "data-model", "tier": "dynamic",
+            "slots": {
+                "database-type": _slot("PG"),
+                "alpha_under": _slot("ALPHAMARKER" + "x" * 2000, updated=fresh, verified=fresh),
+                "bravo-hyphen": _slot("BRAVOMARKER" + "y" * 2000, updated=stale, verified=stale),
+            },
+        })
+        md = render_export_budgeted(facts, budget_tokens=600)
+        assert "ALPHAMARKER" in md
+        assert "BRAVOMARKER" not in md

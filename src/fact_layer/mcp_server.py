@@ -140,7 +140,7 @@ def facts_scan(
     paths: list[str] | None = None,
     categories: list[str] | None = None,
     extractors: list[str] | None = None,
-    model: str = "claude-sonnet-4-6",
+    model: str | None = None,
     api_key: str | None = None,
     full: bool = False,
 ) -> dict:
@@ -154,8 +154,8 @@ def facts_scan(
         paths: File or directory paths to scan. Omit to auto-discover from project root.
         categories: Only return candidates for these categories. Omit for all.
         extractors: Only use these extractors (e.g. ["config", "markdown"]). Omit for all.
-        model: LLM model for markdown extraction (default: claude-sonnet-4-6).
-        api_key: Anthropic API key. Falls back to ANTHROPIC_API_KEY env var.
+        model: Override the LLM model. Omit to use the role default from core.config.
+        api_key: LLM API key. Falls back to OPENAI_API_KEY / ANTHROPIC_API_KEY env.
         full: Ignore indexes and rescan all files (default: False).
     """
     import os
@@ -299,10 +299,37 @@ def facts_set(slot: str, value: str | int | float | bool | list | dict, reason: 
 
 
 @mcp.tool()
+def facts_add(
+    category: str,
+    slot_id: str,
+    value: str | int | float | bool | list | dict,
+    reason: str | None = None,
+) -> dict:
+    """Add a NEW slot to an existing category.
+
+    Use this to CREATE a slot that does not yet exist. To UPDATE an existing
+    slot, use facts_set instead. Fails if the slot already exists (use facts_set)
+    or the category is not enabled.
+
+    Args:
+        category: Category name the slot belongs to, e.g. 'data-model'.
+        slot_id: New slot ID; must not already exist in the category, e.g. 'enum-status'.
+        value: Slot value.
+        reason: Optional reason for adding.
+    """
+    facts_dir = _require_facts_dir()
+
+    from fact_layer.core.editor import add_slot
+
+    result = add_slot(facts_dir, category, slot_id, value, reason=reason)
+    return result.model_dump(mode="json")
+
+
+@mcp.tool()
 def facts_set_batch(
     items: list[dict],
     audit: bool = True,
-    model: str = "claude-haiku-4-5-20251001",
+    model: str | None = None,
 ) -> dict:
     """Batch-set multiple slot values, then optionally run an audit.
 
@@ -313,7 +340,7 @@ def facts_set_batch(
     Args:
         items: List of slot updates. Each must have 'slot' and 'value'; 'reason' is optional.
         audit: Run semantic audit after batch write (default: true).
-        model: LLM model for audit (default: claude-haiku-4-5-20251001).
+        model: Override the audit LLM model. Omit to use the role default from core.config.
     """
     facts_dir = _require_facts_dir()
 
@@ -325,14 +352,14 @@ def facts_set_batch(
 
 
 @mcp.tool()
-def facts_audit(model: str = "claude-haiku-4-5-20251001") -> dict:
+def facts_audit(model: str | None = None) -> dict:
     """Run an LLM-powered semantic consistency audit across all canonical facts.
 
     Checks for contradictions, staleness, missing facts, redundant slots,
     and missing dependency relationships.
 
     Args:
-        model: LLM model to use (default: claude-haiku-4-5-20251001).
+        model: Override the audit LLM model. Omit to use the role default from core.config.
     """
     facts_dir = _require_facts_dir()
 
