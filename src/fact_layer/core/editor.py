@@ -13,8 +13,6 @@ from fact_layer.core.impact_cmd import ImpactResult, compute_impact
 from fact_layer.core.loader import load_framework
 from fact_layer.core.registry import get_enabled_categories, resolve_facts_dir
 
-DEFAULT_BATCH_AUDIT_MODEL = "claude-haiku-4-5-20251001"
-
 _yaml = YAML()
 _yaml.preserve_quotes = True
 _yaml.default_flow_style = False
@@ -231,7 +229,7 @@ def set_batch(
     items: list[BatchSetItem],
     *,
     audit: bool = True,
-    audit_model: str = DEFAULT_BATCH_AUDIT_MODEL,
+    audit_model: str | None = None,
     api_key: str | None = None,
 ) -> BatchSetResult:
     results: list[SetResult] = []

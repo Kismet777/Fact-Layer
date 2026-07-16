@@ -128,7 +128,7 @@ class TestScanContext:
         assert ctx.framework is None
         assert ctx.categories is None
         assert ctx.api_key is None
-        assert ctx.model == "claude-sonnet-4-6"
+        assert ctx.model is None  # resolved by core.config (role="scan") when unset
 
     def test_with_values(self):
         ctx = ScanContext(

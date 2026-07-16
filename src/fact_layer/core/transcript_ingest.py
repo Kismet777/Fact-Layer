@@ -260,7 +260,7 @@ def extract_l2(
     reasoning: str,
     steps: list[EvalStep],
     facts_dir: Path,
-    model: str,
+    model: str | None,
 ) -> tuple[str | None, str | None, list[BypassInfo]]:
     """One LLM call → (turn_rationale, conclusion, bypassed). Best-effort; ('',[]) on failure.
 
@@ -279,7 +279,9 @@ def extract_l2(
         fl_export=fl_export[:6000],
     )
     try:
-        raw = llm_call(prompt, model=model, max_tokens=1200)
+        # Reasoning models spend early tokens on chain-of-thought; leave room for
+        # the final JSON. (L2 output itself is small — rationale/conclusion/bypassed.)
+        raw = llm_call(prompt, role="ingest", model=model, max_tokens=4000)
     except Exception:
         return None, None, []
     data = _extract_json(raw)
@@ -343,7 +345,7 @@ def ingest_transcript(
     session: str,
     *,
     only_last_turn: bool = True,
-    model: str = "deepseek-chat",
+    model: str | None = None,
     facts_dir: Path | None = None,
     harness: str = "claude-code",
 ) -> dict:

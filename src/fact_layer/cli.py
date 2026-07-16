@@ -301,9 +301,9 @@ def set_cmd(
         typer.Option("--no-audit", help="Skip automatic audit after batch set"),
     ] = False,
     model: Annotated[
-        str,
-        typer.Option("--model", "-m", help="LLM model for batch audit"),
-    ] = "claude-haiku-4-5-20251001",
+        Optional[str],
+        typer.Option("--model", "-m", help="Override LLM model (default: role-based, see core.config)"),
+    ] = None,
 ) -> None:
     """Set a slot value with automatic metadata update and consistency check.
 
@@ -366,7 +366,7 @@ def _set_batch(
     batch_source: str,
     *,
     no_audit: bool = False,
-    model: str = "claude-haiku-4-5-20251001",
+    model: str | None = None,
 ) -> None:
     import json as json_mod
     import sys
@@ -520,12 +520,12 @@ def scan(
         typer.Option("--yes", "-y", help="Auto-accept all candidates"),
     ] = False,
     model: Annotated[
-        str,
-        typer.Option("--model", "-m", help="LLM model for markdown extraction"),
-    ] = "claude-sonnet-4-6",
+        Optional[str],
+        typer.Option("--model", "-m", help="Override LLM model (default: role-based, see core.config)"),
+    ] = None,
     api_key: Annotated[
         Optional[str],
-        typer.Option("--api-key", help="Anthropic API key (or set ANTHROPIC_API_KEY env)"),
+        typer.Option("--api-key", help="LLM API key (or set OPENAI_API_KEY / ANTHROPIC_API_KEY env)"),
     ] = None,
     extractor: Annotated[
         Optional[str],
@@ -667,9 +667,9 @@ def scan(
 @app.command()
 def suggest(
     model: Annotated[
-        str,
-        typer.Option("--model", "-m", help="Claude model to use"),
-    ] = "claude-sonnet-4-6",
+        Optional[str],
+        typer.Option("--model", "-m", help="Override LLM model (default: role-based, see core.config)"),
+    ] = None,
     yes: Annotated[
         bool,
         typer.Option("--yes", "-y", help="Auto-accept all suggestions"),
@@ -864,9 +864,9 @@ def ingest(
         typer.Option("--only-last-turn", help="Only ingest the most recently completed turn"),
     ] = True,
     model: Annotated[
-        str,
-        typer.Option("--model", "-m", help="LLM model for L2 extraction"),
-    ] = "deepseek-chat",
+        Optional[str],
+        typer.Option("--model", "-m", help="Override LLM model (default: role-based, see core.config)"),
+    ] = None,
     harness: Annotated[
         str | None,
         typer.Option("--harness", help="Tool/harness label stored on the trace; defaults from --tool"),
@@ -1244,9 +1244,9 @@ def access_stats(
 @app.command()
 def audit(
     model: Annotated[
-        str,
-        typer.Option("--model", "-m", help="Claude model to use"),
-    ] = "claude-sonnet-4-6",
+        Optional[str],
+        typer.Option("--model", "-m", help="Override LLM model (default: role-based, see core.config)"),
+    ] = None,
     yes: Annotated[
         bool,
         typer.Option("--yes", "-y", help="Skip confirmation prompt"),
@@ -1289,10 +1289,13 @@ def audit(
     from fact_layer.core.editor import parse_value
     from fact_layer.core.suggest_cmd import Suggestion, apply_suggestion
 
+    from fact_layer.core.config import model_for
+
     prompt = build_audit_prompt(facts_dir)
     token_est = estimate_tokens(prompt)
+    resolved_model = model or model_for("audit")
     console.print(f"[bold]Running LLM-powered consistency audit...[/bold]")
-    console.print(f"  Input: ~{token_est} tokens, model: {model}\n")
+    console.print(f"  Input: ~{token_est} tokens, model: {resolved_model}\n")
 
     if not yes:
         if not Confirm.ask("Proceed?", default=True):

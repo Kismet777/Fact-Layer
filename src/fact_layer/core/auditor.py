@@ -91,19 +91,30 @@ def estimate_tokens(text: str) -> int:
 
 def run_audit(
     facts_dir: Path,
-    model: str = "claude-sonnet-4-6",
+    model: str | None = None,
     api_key: str | None = None,
 ) -> AuditResult:
     prompt = build_audit_prompt(facts_dir)
 
-    try:
-        from fact_layer.core.llm import llm_call
+    from fact_layer.core.llm import llm_call
 
-        raw = llm_call(prompt, model=model, api_key=api_key)
-    except Exception as e:
-        return AuditResult(error=f"API call failed: {e}", raw_response="")
-
-    return _parse_response(raw)
+    # One retry when the model returns something we can't parse as JSON — a
+    # transient malformed response shouldn't fail the whole audit.
+    result: AuditResult | None = None
+    for _ in range(2):
+        try:
+            # Reasoning models (deepseek-v4-*) spend the early token budget on
+            # chain-of-thought; give enough room for the final JSON to land in
+            # `content` rather than truncating mid-reasoning.
+            raw = llm_call(
+                prompt, role="audit", model=model, api_key=api_key, max_tokens=8000
+            )
+        except Exception as e:
+            return AuditResult(error=f"API call failed: {e}", raw_response="")
+        result = _parse_response(raw)
+        if result.error is None:
+            return result
+    return result if result is not None else AuditResult(error="Audit failed")
 
 
 def _parse_response(raw: str) -> AuditResult:

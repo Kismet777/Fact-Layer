@@ -110,7 +110,7 @@ def parse_suggestions(
 
 def run_suggest(
     facts_dir: Path,
-    model: str = "claude-sonnet-4-6",
+    model: str | None = None,
     api_key: str | None = None,
     today: date | None = None,
 ) -> SuggestResult:
@@ -123,7 +123,8 @@ def run_suggest(
     try:
         from fact_layer.core.llm import llm_call
 
-        raw = llm_call(prompt, model=model, api_key=api_key)
+        # Reasoning models need headroom beyond their chain-of-thought for the JSON.
+        raw = llm_call(prompt, role="suggest", model=model, api_key=api_key, max_tokens=8000)
     except Exception as e:
         return SuggestResult(error=f"API call failed: {e}")
 

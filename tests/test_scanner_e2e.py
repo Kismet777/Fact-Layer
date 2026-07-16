@@ -148,13 +148,9 @@ class TestEndToEnd:
             "evidence": "Built with FastAPI and PostgreSQL 16.",
         }], "unmapped": []})
 
-        mock_msg = MagicMock()
-        mock_msg.content = [MagicMock(text=mock_response)]
-        mock_mod = MagicMock()
-        mock_mod.Anthropic.return_value.messages.create.return_value = mock_msg
-
         with patch(
-            "fact_layer.core.scanner.extractors.markdown._anthropic_mod", mock_mod,
+            "fact_layer.core.scanner.extractors.markdown.llm_call",
+            return_value=mock_response,
         ):
             result = run_scan(proj, api_key="sk-test")
 
@@ -162,11 +158,16 @@ class TestEndToEnd:
         assert "config-parser" in extractors_used
 
     def test_no_api_key_skips_markdown(self, tmp_path: Path):
-        """Without API key, markdown files are discovered but produce no results."""
+        """Without credentials, markdown files are discovered but produce no results."""
         proj = _build_realistic_project(tmp_path)
         readme = proj / "README.md"
         readme.write_text("# Hello\n")
-        result = run_scan(proj)
+        # No creds -> unified LLM layer raises -> markdown extractor yields nothing.
+        with patch(
+            "fact_layer.core.scanner.extractors.markdown.llm_call",
+            side_effect=RuntimeError("No LLM API key configured."),
+        ):
+            result = run_scan(proj)
         for c in result.candidates:
             assert c.extractor == "config-parser"
 
@@ -191,13 +192,9 @@ class TestEndToEnd:
             "suggested_slot": "branching-strategy",
         }]})
 
-        mock_msg = MagicMock()
-        mock_msg.content = [MagicMock(text=mock_response)]
-        mock_mod = MagicMock()
-        mock_mod.Anthropic.return_value.messages.create.return_value = mock_msg
-
         with patch(
-            "fact_layer.core.scanner.extractors.markdown._anthropic_mod", mock_mod,
+            "fact_layer.core.scanner.extractors.markdown.llm_call",
+            return_value=mock_response,
         ):
             result = run_scan(proj, api_key="sk-test")
 
@@ -219,13 +216,9 @@ class TestEndToEnd:
             "evidence": "Built with FastAPI.",
         }], "unmapped": []})
 
-        mock_msg = MagicMock()
-        mock_msg.content = [MagicMock(text=mock_response)]
-        mock_mod = MagicMock()
-        mock_mod.Anthropic.return_value.messages.create.return_value = mock_msg
-
         with patch(
-            "fact_layer.core.scanner.extractors.markdown._anthropic_mod", mock_mod,
+            "fact_layer.core.scanner.extractors.markdown.llm_call",
+            return_value=mock_response,
         ):
             result = run_scan(proj, api_key="sk-test")
 

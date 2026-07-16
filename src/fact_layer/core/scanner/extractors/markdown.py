@@ -8,8 +8,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-import anthropic as _anthropic_mod
-
+from fact_layer.core.llm import llm_call
 from fact_layer.core.scanner.candidates import (
     ExtractResult,
     ScanContext,
@@ -163,21 +162,21 @@ def extract_markdown(
     if not content:
         return ExtractResult()
 
-    if not context or not context.api_key:
+    if not context:
         return ExtractResult()
 
     system_prompt = _build_system_prompt(context)
     user_prompt = _build_user_prompt(path, content)
 
     try:
-        client = _anthropic_mod.Anthropic(api_key=context.api_key)
-        response = client.messages.create(
+        raw = llm_call(
+            user_prompt,
+            role="scan",
             model=context.model,
-            max_tokens=4096,
             system=system_prompt,
-            messages=[{"role": "user", "content": user_prompt}],
+            max_tokens=4096,
+            api_key=context.api_key,
         )
-        raw = response.content[0].text
     except Exception:
         return ExtractResult()
 

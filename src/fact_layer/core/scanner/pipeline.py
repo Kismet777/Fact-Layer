@@ -206,7 +206,7 @@ def run_scan(
     categories: list[str] | None = None,
     extractors: list[str] | None = None,
     api_key: str | None = None,
-    model: str = "claude-sonnet-4-6",
+    model: str | None = None,
     full: bool = False,
 ) -> ScanResult:
     allowed_extractors: set[str] | None = None

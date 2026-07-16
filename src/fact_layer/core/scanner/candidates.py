@@ -49,7 +49,7 @@ class ScanContext(BaseModel):
     framework: Any = None
     categories: dict[str, Any] | None = None
     api_key: str | None = None
-    model: str = "claude-sonnet-4-6"
+    model: str | None = None  # None -> resolved by core.config (role="scan")
 
 
 class ExtractResult(BaseModel):

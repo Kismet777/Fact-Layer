@@ -284,7 +284,7 @@ def ingest_rollout(
     session: str | None = None,
     *,
     only_last_turn: bool = True,
-    model: str = "deepseek-chat",
+    model: str | None = None,
     facts_dir: Path | None = None,
     harness: str = "codex",
 ) -> dict:

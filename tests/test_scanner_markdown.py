@@ -15,11 +15,12 @@ from fact_layer.core.scanner.extractors.markdown import (
     extract_markdown,
 )
 
-_MOCK_TARGET = "fact_layer.core.scanner.extractors.markdown._anthropic_mod"
+# extract_markdown now goes through the unified core.llm.llm_call seam.
+_MOCK_TARGET = "fact_layer.core.scanner.extractors.markdown.llm_call"
 
 
 def _mock_context(**overrides) -> ScanContext:
-    defaults = {"api_key": "sk-test", "model": "claude-sonnet-4-6"}
+    defaults = {"api_key": "sk-test", "model": None}
     defaults.update(overrides)
     return ScanContext(**defaults)
 
@@ -32,12 +33,8 @@ def _mock_llm_response(candidates=None, unmapped=None) -> str:
 
 
 def _patch_llm(response_text: str):
-    """Return a context manager that mocks the anthropic module."""
-    mock_msg = MagicMock()
-    mock_msg.content = [MagicMock(text=response_text)]
-    mock_mod = MagicMock()
-    mock_mod.Anthropic.return_value.messages.create.return_value = mock_msg
-    return patch(_MOCK_TARGET, mock_mod)
+    """Mock llm_call to return the given raw JSON string."""
+    return patch(_MOCK_TARGET, return_value=response_text)
 
 
 class TestExtractMarkdownGuards:
@@ -57,10 +54,13 @@ class TestExtractMarkdownGuards:
         result = extract_markdown(md, None)
         assert result == ExtractResult()
 
-    def test_no_api_key(self, tmp_path: Path):
+    def test_no_credentials_returns_empty(self, tmp_path: Path):
+        # With no api_key and no env credentials, the unified LLM layer raises;
+        # extract_markdown must swallow it and yield an empty result.
         md = tmp_path / "test.md"
         md.write_text("# Hello\n")
-        result = extract_markdown(md, ScanContext())
+        with patch(_MOCK_TARGET, side_effect=RuntimeError("No LLM API key configured.")):
+            result = extract_markdown(md, ScanContext())
         assert result == ExtractResult()
 
 
@@ -110,10 +110,7 @@ class TestExtractMarkdownLLM:
         md = tmp_path / "README.md"
         md.write_text("# My Project\n")
 
-        mock_mod = MagicMock()
-        mock_mod.Anthropic.side_effect = Exception("API down")
-
-        with patch(_MOCK_TARGET, mock_mod):
+        with patch(_MOCK_TARGET, side_effect=Exception("API down")):
             result = extract_markdown(md, _mock_context())
 
         assert result == ExtractResult()
