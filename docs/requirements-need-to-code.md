@@ -144,12 +144,16 @@ FL 对这条根需求的回答，就是把"可信"拆成**四个可被守卫、�
 │              ② 只覆盖经 scan 进来的事实，人/agent 声明的 slot 无源关联；
 │              ③ 未接入 `fl check`/staleness 主循环，是独立命令。详见第四棵树 §4.3。
 │
-└── 🔵 2.4 版本化 / delta 感知（只报变化，philosophy 原则 6）
+└── 🟡 2.4 版本化 / delta 感知（只报变化，philosophy 原则 6）
         **动机（实测痛点）**：agent 为了解项目反复调 export，同样内容大量重复污染上下文。
         解法两半：① 少 export——用 facts_search（§1.3）+ facts_trace（§3.4）精准取，不必全量 dump；
         ② export 不重复吐——bootstrap-once + delta（"自上次无变化"就不再吐全量）。
-        对应 per-slot revision + delta-since-revision = **FL-022**（plans/2026-07-06）；
-        export bootstrap+delta = **FL-021 L3**（plans/2026-07-05 §L3）。
+        ✅ **v1 已实现（无状态轻量水位线 delta）**：exporter.py:compute_watermark / render_export_delta；
+           每次 export 尾行吐 `fl-watermark: <date>:<hash>` 令牌，CLI `fl export --since` / MCP facts_export(since=)。
+           无变化→极小 "No fact changes"；有变化→只给该日期及之后的 slot。
+           已知边界：date 颗粒度（同日重复带上、绝不漏）、不报删除。杀的是"重复吐"，跨新会话仍需一次全量 bootstrap。
+        🔵 **完整版仍 roadmap**：per-slot revision + delta-since-revision = **FL-022**（精确到条、报增删）；
+           export bootstrap 语义 + 文档式真源 = **FL-021 L3**。
 ```
 
 ---
@@ -279,7 +283,8 @@ FL 对这条根需求的回答，就是把"可信"拆成**四个可被守卫、�
 | 注入式演习 | 5.3 可自证 | 结果层召回率/延迟测量未建 | 🔴 待建 | philosophy §6 |
 | scan-integrity 回连 slot | 2.3 当前 | 源哈希只服务扫描增量，未回连 slot（→ 并入 FL-027） | 🟡 部分 | 本文新登记 |
 | FL-022 | 3.6 一致 | 并发底座：per-slot revision / compare-and-set / delta / 依赖冲突浮现（P0 地基） | 🔵 roadmap | plans/2026-07-06 |
-| FL-021 L3 | 2.4/4.4 当前+可溯源 | export bootstrap+delta（**解 export 反复污染上下文**）；文档式真源一等公民（承重墙） | 🔵 roadmap | plans/2026-07-05/06 |
+| delta 水位线 v1 | 2.4 当前 | 无状态水位线 delta export（解 export 反复污染）——**已实现** | ✅ 已实现 | commit 86de58c |
+| FL-021 L3 | 2.4/4.4 当前+可溯源 | 精确 delta（FL-022 报增删）+ export bootstrap 语义 + 文档式真源（承重墙） | 🔵 roadmap | plans/2026-07-05/06 |
 | 网状可视化 | 3.4 一致（归属待定） | 交互式依赖图前端（拖拽/点击节点看信息）；通过身份测试但 FL 无前端，内建 vs 独立 viewer 待定 | 🔴 待议 | 本文新登记 |
 | FL-024 | （协作 state） | 角色记忆系统（参考态、append-only 索引，P1，设计已固化） | 🔵 roadmap | plans/2026-07-06 |
 | FL-023 | （协作 state） | warden 审查角色（只标记不回退，P2） | 🔵 roadmap | plans/2026-07-06 |

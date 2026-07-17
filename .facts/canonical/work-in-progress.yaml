@@ -4,47 +4,65 @@ tier: working
 
 slots:
   focus:
-    value: "LLM unified call refactoring, test time-bomb fix, dogfood .facts/ init" # What you're working on right now
+    value: "FL 工具演进线:need→code 需求树已建并提交;export 反复污染的 delta 方案(无状态水位线)已实现;当前在讨论 facts_search(FL-021
+      L1)要实现什么"                                                                     # What you're working on right now
     meta:
       source: human
       confidence: high
       status: active
-      updated: "2026-07-02"
-      verified: "2026-07-02"
+      updated: "2026-07-17"
+      verified: "2026-07-17"
 
-      reason: dogfood init
+      reason: session 2026-07-17 留档
   next-steps:
-    value: []                # Immediate next actions
+    value:                   # Immediate next actions
+    - 敲定 facts_search(FL-021 L1)设计并 TDD 
+      实现:①匹配机制(倾向离线子串,因事实中英混合、暂不上语义)②搜索字段③返回形态(倾向直接带完整值)④排序⑤边界(只搜 slot 不搜文档正文)
+    - 提交待定文档:需求树 §2.4 delta v1 更新(working tree 未提交)+ 按需 push main 到 origin
+    - philosophy 重写(docs/architecture-philosophy.md,待重写勿提)排在 search 之后
     meta:
       source: human
-      confidence: medium
+      confidence: high
       status: active
-      updated: "2026-01-01"
-      verified: "2026-01-01"
+      updated: "2026-07-17"
+      verified: "2026-07-17"
 
   blockers:
-    value: []                # What's blocking progress
+    value:                   # What's blocking progress
+    - 无硬阻塞;facts_search 实现前需用户敲定设计决策 ①-⑤
     meta:
       source: human
       confidence: high
       status: active
-      updated: "2026-01-01"
-      verified: "2026-01-01"
+      updated: "2026-07-17"
+      verified: "2026-07-17"
 
   recent-changes:
-    value: []                # Notable recent changes for agent context
+    value:                   # Notable recent changes for agent context
+    - 2026-07-16 need→code 
+      需求树建成(docs/requirements-need-to-code.md),按四属性+可自证组织,含双向审计与缺口登记
+    - 2026-07-16 delta 水位线 export 实现(commit 86de58c):fl export --since / 
+      facts_export(since=),无状态令牌 <date>:<hash>
+    - 已提交推送:FL-026 facts_add + Bug B 下划线修复(3827683)、LLM 
+      单源重构(904adcf)、需求树+plans(15eb280)
     meta:
       source: human
       confidence: high
       status: active
-      updated: "2026-01-01"
-      verified: "2026-01-01"
+      updated: "2026-07-17"
+      verified: "2026-07-17"
 
   known-issues:
-    value: []                # Known bugs or debt items
+    value:                   # Known bugs or debt items
+    - 运行中的 fl-mcp 是旧进程:需重启才暴露 facts_add 和 facts_export 的 since 参数,并使 model=None 
+      走 config(deepseek)
+    - architecture-philosophy.md 待重写勿提(未跟踪);其把 source-of-record/derived_from 
+      当已实现叙述,与数据模型不符(philosophy↔code 漂移)
+    - 边界待议(挂不进四属性):FL-023 warden/FL-024 角色记忆/冷热分层=参考态非真源;网状可视化=通过身份测试但 FL 无前端
+    - delta v1 已知边界:date 颗粒度(同日重复带上、绝不漏)、不报删除;精确到条+报增删待 FL-022
     meta:
       source: human
       confidence: high
       status: active
-      updated: "2026-01-01"
-      verified: "2026-01-01"
+      updated: "2026-07-17"
+      verified: "2026-07-17"
