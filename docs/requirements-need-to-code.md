@@ -12,7 +12,7 @@
 **怎么读这棵树（双向审计）**：
 
 - **自底向上**：任何一个功能/代码，都必须能沿树向上追到一条真实需求。**追不到需求的功能 = 多余**，是要被质疑删除的对象。
-- **自顶向下**：任何一条需求，都应能向下派生到非空的叶子（代码）。**向下是空叶子的需求 = 缺口**，是 roadmap 的来源（如 `facts_search`、源指纹漂移检测尚未建）。
+- **自顶向下**：任何一条需求，都应能向下派生到非空的叶子（代码）。**向下是空叶子的需求 = 缺口**，是 roadmap 的来源（如 `facts_trace`、源指纹值失真对账、注入式演习尚未建）。
 
 叶子状态标记：
 - ✅ **已实现**——有对应代码，命令/工具可用。
@@ -84,19 +84,23 @@ FL 对这条根需求的回答，就是把"可信"拆成**四个可被守卫、�
 ├── 1.3 读具体事实（已知道要哪条 / 哪类）
 │     ├── ✅ 单条读：MCP facts_get（CLI 侧经 export/status 间接可见）
 │     ├── ✅ 列一个类别的 slot：CLI（经 export）/ MCP facts_list
-│     └── 🔴 按内容/语义发现事实（不预先知道 slot 名也能找到）：facts_search 未建
-│              = **FL-021 L1**（已规划于 plans/2026-07-05，非新项）。
-│              philosophy 原则 5 明确要求、但当前完全没有的叶子——典型"空叶子=缺口"。
-│              现状：agent 只能靠 export 全量 + 自己扫，或预先知道 category.slot-id。
+│     └── ✅ 按内容发现事实（不预先知道 slot 名也能找到）：facts_search（**FL-021 L1**）
+│              CLI `fl search <query>` / MCP facts_search → core/search_cmd.py:compute_search（纯函数）。
+│              离线子串匹配（大小写不敏感；多词 = AND；CJK 无空格查询按整段子串），
+│              搜 slot-id + 拍平后的 value + reason，命中回完整值 + matched_fields（标出哪些字段命中）。
+│              默认只搜 active，`--include-stale` 纳入 stale/superseded；`--limit` 截断（默认 20，超出标 truncated）。
+│              兑现 philosophy 原则 5"找得到"这一叶子。**边界**：纯词面，不做语义/embeddings
+│              （会引入存储派生物 + 软推理，违原则 2/7）；语义级发现仍靠 facts_scan / audit。
 │
 ├── 1.4 知道现在有哪些事实（全量清单 / 简介）
 │     ├── ✅ 全量内容快照：CLI `fl export` / MCP facts_export
 │     │        → core/exporter.py:render_export（全量）/ render_export_budgeted（带 token 预算截断）
 │     ├── ✅ 分类别概览（填充数/tier，无逐条内容）：
 │     │        CLI `fl status` / MCP facts_status → core/status_cmd.py:compute_status
-│     └── 🟡 介于两者之间的"目录式清单"（列全部 slot + 每条一行简介、不含完整值）
-│              没有独立模式：export 是全量正文（偏重）、status 是纯计数（偏薄），
-│              "轻量目录"这一档当前落在缝里。可作为一个小缺口登记。
+│     └── ✅ 目录式清单（列全部 slot + 每条一行 snippet、不含完整值）：
+│              CLI `fl export --outline` / MCP facts_export(outline=True) → core/exporter.py:render_export_outline。
+│              补上 export（全量正文，偏重）与 status（纯计数，偏薄）之间的"轻量目录"一档，
+│              是"先 outline 认路 → search 模糊 → get 精确"闭环的入口，避免为认路而全量 dump。
 │
 │ ── B. 完整性层：FL 全集是否够全（更高抽象） ──────────────────
 │
@@ -248,9 +252,14 @@ FL 对这条根需求的回答，就是把"可信"拆成**四个可被守卫、�
 ```
 可自证
 ├── 5.1 承重性地板：FL 到底被不被查（客观、不可粉饰）
-│     └── ✅ 访问日志（每次 get/list/check/export 都记）→ core/access_log.py:log_access
-│              统计：CLI `fl eval access-stats` / MCP facts_eval_access_stats
-│              → core/access_log.py:compute_access_stats（按 caller/op/热点槽位聚合）
+│     ├── ✅ 访问日志（每次 get/list/check/export 都记）→ core/access_log.py:log_access
+│     │        统计：CLI `fl eval access-stats` / MCP facts_eval_access_stats
+│     │        → core/access_log.py:compute_access_stats（按 caller/op/热点槽位聚合）
+│     └── ✅ search 专项埋点（度量 §1.3 那条叶子真被用、且真转化为读）：
+│              log_search 每次调用记 op=search（args 含 query + hits 数），每个命中槽位另记 op=search-hit；
+│              compute_access_stats 由此产出 by_slot_op 交叉表（slot × 触达方式）、search_empty_rate（空结果率）、
+│              search_to_get_rate（命中后该槽是否又被 get 的槽级转化率，用 by_slot_op 共现估、顺序不敏感）。
+│              CLI access-stats 打印 "search 健康" 行（调用数/空结果率/转化率）；完整 by_slot_op 交叉表经 MCP 返回。
 │
 ├── 5.2 语义化 eval trace（四属性 + bypass 的可测化）
 │     ├── ✅ 写 trace：CLI `fl eval log` / MCP facts_eval_log → core/eval_cmd.py:save_trace
@@ -273,11 +282,12 @@ FL 对这条根需求的回答，就是把"可信"拆成**四个可被守卫、�
 
 | 编号 | 需求归属 | 缺口 | 状态 | 出处 |
 |------|----------|------|------|------|
-| FL-021 L1 | 1.3 完整 | facts_search：按内容/语义发现事实的接口未建 | 🔴 待实现 | plans/2026-07-05 |
+| FL-021 L1 | 1.3 完整 | facts_search：按内容发现事实（离线子串，CLI+MCP 双路）——**已实现** | ✅ 已实现 | commit b627f69 |
 | FL-021 L2 | 3.4 一致 | facts_trace：沿依赖+affected-slots 双向遍历推理链未建 | 🔴 待实现 | plans/2026-07-05 |
 | FL-027 | 1.5/4.3 完整+可溯源 | 内外完整性对账（缺失+失真统一对账，补 _check_value_mismatch） | 🔴 待实现 | plans/2026-07-16 |
 | FL-025 | 1.2 完整 | 类别生命周期无接口，只能手改 framework.yaml | 🔴 待实现 | plans/2026-07-13 |
-| 目录式清单 | 1.4 完整 | "全部 slot + 每条一行简介"的轻量目录模式缺失 | 🟡 缝隙 | 本文新登记 |
+| 目录式清单 | 1.4 完整 | export --outline / facts_export(outline=)：全 slot + 一行 snippet 轻量目录——**已实现** | ✅ 已实现 | commit b627f69 |
+| search 埋点/指标 | 5.1 可自证 | search 专项埋点 + by_slot_op 交叉表 / 空结果率 / search→get 转化率——**已实现** | ✅ 已实现 | commit b627f69 |
 | 真源指针字段 | 4.1 可溯源 | SlotMeta 无 source-of-record 字段（结构性缺失，非"占比低"） | 🔴 待实现 | 本文核实 |
 | 值失真对账 | 4.3 可溯源 | 源指纹已有，但 _check_value_mismatch 空壳、不覆盖人/agent 事实 | 🔴 半成品 | 本文核实 |
 | 注入式演习 | 5.3 可自证 | 结果层召回率/延迟测量未建 | 🔴 待建 | philosophy §6 |
