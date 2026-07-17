@@ -196,6 +196,47 @@ def status() -> None:
 
 
 @app.command()
+def search(
+    query: Annotated[str, typer.Argument(help="Search text; multi-word = AND")],
+    category: Annotated[Optional[str], typer.Option("--category", "-c", help="Restrict to one category")] = None,
+    include_stale: Annotated[bool, typer.Option("--include-stale", help="Also search stale/superseded slots")] = False,
+    limit: Annotated[int, typer.Option("--limit", help="Max hits")] = 20,
+) -> None:
+    """Find facts by content (offline substring; searches slot-id/value/reason)."""
+    from fact_layer.core.access_log import log_search
+    from fact_layer.core.registry import resolve_facts_dir
+    from fact_layer.core.search_cmd import compute_search
+
+    facts_dir = resolve_facts_dir()
+    if not facts_dir:
+        console.print("[red]No .facts/ directory found. Run 'fl init' first.[/red]")
+        raise typer.Exit(1)
+
+    result = compute_search(
+        facts_dir, query, category=category, include_stale=include_stale, limit=limit
+    )
+    log_search(facts_dir, query, [h.slot_ref for h in result.hits], via="cli")
+
+    if not result.hits:
+        console.print(f"[yellow]No facts match '{query}'.[/yellow]")
+        return
+
+    console.print(f"[bold]{len(result.hits)} match(es) for '{query}'[/bold]")
+    if result.truncated:
+        console.print(f"[dim](truncated to {limit}; refine query or raise --limit)[/dim]")
+    console.print()
+    for h in result.hits:
+        status_tag = "" if h.status == "active" else f" [yellow]({h.status})[/yellow]"
+        fields = ",".join(h.matched_fields)
+        console.print(f"[bold cyan]{h.slot_ref}[/bold cyan]{status_tag}  [dim]match:{fields}[/dim]")
+        for line in h.value.splitlines() or [h.value]:
+            console.print(f"    {line}")
+        if h.reason:
+            console.print(f"    [dim]reason: {h.reason}[/dim]")
+        console.print()
+
+
+@app.command()
 def impact(
     slot: Annotated[str, typer.Argument(help="Slot to analyze, e.g. tech-stack.database")],
 ) -> None:
@@ -252,6 +293,10 @@ def export(
         Optional[str],
         typer.Option("--since", help="Watermark token from a prior export (delta mode)"),
     ] = None,
+    outline: Annotated[
+        bool,
+        typer.Option("--outline", help="Lightweight catalog: all slots + one-line snippet, no full values"),
+    ] = False,
 ) -> None:
     """Export all canonical facts as a single markdown snapshot for agent consumption."""
     from fact_layer.core.access_log import log_access
@@ -259,6 +304,7 @@ def export(
         render_export,
         render_export_budgeted,
         render_export_delta,
+        render_export_outline,
     )
     from fact_layer.core.registry import resolve_facts_dir
 
@@ -270,11 +316,13 @@ def export(
     log_access(
         facts_dir,
         "export",
-        args={k: v for k, v in {"budget": budget, "since": since}.items() if v} or None,
+        args={k: v for k, v in {"budget": budget, "since": since, "outline": outline}.items() if v} or None,
         via="cli",
     )
 
-    if since is not None:
+    if outline:
+        md = render_export_outline(facts_dir)
+    elif since is not None:
         md = render_export_delta(facts_dir, since)
     elif budget is not None:
         md = render_export_budgeted(facts_dir, budget_tokens=budget)
@@ -1254,6 +1302,13 @@ def access_stats(
         console.print("[bold]热点槽位/类别 Top 10:[/bold]")
         for hit in result.top_slots:
             console.print(f"  {hit.slot_ref:<35} {hit.count:>3} 次")
+
+    if result.search_total:
+        console.print()
+        console.print("[bold]search 健康:[/bold]")
+        empty_pct = f"{result.search_empty_rate:.0%}" if result.search_empty_rate is not None else "—"
+        conv_pct = f"{result.search_to_get_rate:.0%}" if result.search_to_get_rate is not None else "—"
+        console.print(f"  调用 {result.search_total} 次 · 空结果率 {empty_pct} · search→get 转化 {conv_pct}")
 
 
 @app.command()

@@ -90,8 +90,20 @@ class AccessStats(BaseModel):
 
     total: int
     by_caller: dict[str, int] = Field(default_factory=dict)  # harness: codex/claude-code/…
-    by_op: dict[str, int] = Field(default_factory=dict)  # get/list/check/export
+    by_op: dict[str, int] = Field(default_factory=dict)  # get/list/check/export/search/search-hit
     by_via: dict[str, int] = Field(default_factory=dict)  # interface: cli/mcp
     top_slots: list[SlotHit] = Field(default_factory=list)
+    # slot_ref -> {op: count}: how each fact was reached (get vs search-hit vs …).
+    # Answers "which slot was touched, and by which path" — validates whether
+    # search/outline actually offload the full-export leg.
+    by_slot_op: dict[str, dict[str, int]] = Field(default_factory=dict)
+    # facts_search health (derived from op=search / search-hit records).
+    search_total: int = 0  # number of search invocations
+    search_empty: int = 0  # invocations that returned zero hits
+    search_empty_rate: float | None = None  # search_empty / search_total (None if no searches)
+    # slot-level search→get conversion: of slots surfaced by search, the fraction
+    # also fetched via get. Order-insensitive (uses by_slot_op, not timestamps):
+    # within a session search precedes get logically, so co-occurrence is the signal.
+    search_to_get_rate: float | None = None
     first_ts: str | None = None
     last_ts: str | None = None

@@ -4,14 +4,16 @@ from __future__ import annotations
 
 from fastmcp import FastMCP
 
-from fact_layer.core.access_log import log_access
+from fact_layer.core.access_log import log_access, log_search
 from fact_layer.core.checker import run_check
 from fact_layer.core.exporter import (
     render_export,
     render_export_budgeted,
     render_export_delta,
+    render_export_outline,
 )
 from fact_layer.core.impact_cmd import compute_impact
+from fact_layer.core.search_cmd import compute_search
 from fact_layer.core.loader import load_all_categories
 from fact_layer.core.registry import resolve_facts_dir
 from fact_layer.core.status_cmd import compute_status
@@ -116,6 +118,35 @@ def facts_impact(slot: str) -> dict:
 
 
 @mcp.tool()
+def facts_search(
+    query: str,
+    category: str | None = None,
+    include_stale: bool = False,
+    limit: int = 20,
+) -> dict:
+    """Search facts by content — find a slot without knowing its category.slot-id.
+
+    Offline case-insensitive substring match over each slot's id, value, and
+    reason. Multi-word queries are AND (every whitespace-split token must appear);
+    a query with no spaces matches as one contiguous run. Each hit carries the
+    full value + which fields matched, so you usually need no follow-up facts_get.
+
+    Args:
+        query: search string. Empty → no hits.
+        category: restrict to one category (a filter, not a searched field).
+        include_stale: also search stale/superseded slots (default active-only).
+            Every hit shows its status, so a non-active match is labeled, not hidden.
+        limit: max hits (default 20); ``truncated`` flags when more matched.
+    """
+    facts_dir = _require_facts_dir()
+    result = compute_search(
+        facts_dir, query, category=category, include_stale=include_stale, limit=limit
+    )
+    log_search(facts_dir, query, [h.slot_ref for h in result.hits], via="mcp")
+    return result.model_dump(mode="json")
+
+
+@mcp.tool()
 def facts_status() -> dict:
     """Get health overview of all fact categories."""
     facts_dir = _require_facts_dir()
@@ -125,26 +156,35 @@ def facts_status() -> dict:
 
 
 @mcp.tool()
-def facts_export(budget: int | None = None, since: str | None = None) -> str:
+def facts_export(
+    budget: int | None = None, since: str | None = None, outline: bool = False
+) -> str:
     """Export facts as a markdown snapshot for agent consumption.
 
     Every export ends with an `fl-watermark:` token. To avoid re-reading the
     same content across turns, pass that token back as `since`: you then get
     only the facts changed since, or a tiny "no changes" note if nothing moved.
 
+    For a cheap first look, use `outline=True`: it lists every slot with a
+    one-line snippet (no full values), so you learn what facts exist without
+    pulling them all — then use facts_search / facts_get for the ones you need.
+
     Args:
         budget: Optional max token budget. Omit for full export.
         since: Optional watermark token from a previous export (delta mode).
             Takes precedence over budget.
+        outline: Lightweight catalog mode (takes precedence over since/budget).
     """
     facts_dir = _require_facts_dir()
     log_access(
         facts_dir,
         "export",
-        args={k: v for k, v in {"budget": budget, "since": since}.items() if v} or None,
+        args={k: v for k, v in {"budget": budget, "since": since, "outline": outline}.items() if v} or None,
         via="mcp",
     )
 
+    if outline:
+        return render_export_outline(facts_dir)
     if since is not None:
         return render_export_delta(facts_dir, since)
     if budget is not None:

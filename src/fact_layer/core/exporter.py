@@ -192,6 +192,64 @@ def render_export(facts_dir: Path, max_decisions: int = 10) -> str:
     return _render_context(ctx) + _watermark_trailer(facts_dir)
 
 
+_OUTLINE_SNIPPET_LEN = 80
+
+
+def _one_line_snippet(value: Any) -> str:
+    """Collapse any value to a single truncated line for the outline catalog.
+
+    Decisions (dict with title) show their title; other dicts/lists are joined.
+    Newlines collapse to spaces so one slot = one physical line, and the result
+    is capped so the outline stays a lightweight index, never a value dump.
+    """
+    if isinstance(value, dict):
+        raw = str(value.get("title")) if value.get("title") else ", ".join(map(str, value))
+    elif isinstance(value, list):
+        raw = ", ".join(str(v) for v in value)
+    else:
+        raw = str(value)
+    collapsed = " ".join(raw.split())
+    if len(collapsed) > _OUTLINE_SNIPPET_LEN:
+        collapsed = collapsed[:_OUTLINE_SNIPPET_LEN].rstrip() + "…"
+    return collapsed
+
+
+def render_export_outline(facts_dir: Path) -> str:
+    """Lightweight catalog: every active slot as 'category.slot-id: snippet'.
+
+    No full values — the closed-loop entry point. An agent reads the outline to
+    learn *what facts exist* cheaply, then uses facts_search / facts_get to pull
+    the ones it actually needs. Ends with the same watermark as export.
+    """
+    config = load_framework(facts_dir)
+    categories = load_all_categories(facts_dir)
+    enabled = get_enabled_categories(config)
+
+    ordered_names = sorted(
+        (name for name in categories if name in enabled),
+        key=lambda n: _category_sort_key(n, categories[n].tier),
+    )
+
+    lines = ["# Project Facts — Outline", ""]
+    for cat_name in ordered_names:
+        cat = categories[cat_name]
+        entries = []
+        for slot_id, sv in cat.slots.items():
+            if sv.meta.status not in ACTIVE_STATUSES:
+                continue
+            if is_empty_value(sv.value):
+                continue
+            entries.append(f"- {cat_name}.{slot_id}: {_one_line_snippet(sv.value)}")
+        if not entries:
+            continue
+        title = CATEGORY_TITLES.get(cat_name, _slot_display_name(cat_name))
+        lines.append(f"## {title}")
+        lines.extend(entries)
+        lines.append("")
+
+    return "\n".join(lines) + _watermark_trailer(facts_dir)
+
+
 # ---------------------------------------------------------------------------
 # Watermark / delta export — kills repeated full-export context pollution.
 #
