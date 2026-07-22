@@ -38,6 +38,25 @@ slots:
       source: human
       confidence: high
       status: active
-      updated: '2026-07-02'
-      verified: '2026-07-02'
-      reason: dogfood init
+      updated: '2026-07-22'
+      verified: '2026-07-22'
+      reason: 治理响应:重新 verify(内容仍准确,预防式架构即 FL 现状)刷新 last_verified;不调阈值(tier 议题单列)
+  governance-cadence:
+    value:
+      title: 治理 = 能力 × 触发;先建触发不建工具
+      date: '2026-07-22'
+      status: active
+      summary: FL 提供治理能力(check/audit/impact/未来 warden)但均为自选手动 → 自选=缺席。dogfood 
+        实证(2026-07-22):手动跑一次 check+audit 即抓 6 个真问题——1 条本 session 漂移(blockers 与 
+        focus 矛盾)+ 3 条静默沉淀历史问题(2 悬空依赖边、1 测试计数过期)+ 2 条工具缺口(fl check 
+        漏检悬空边、无依赖边编辑接口)。结论:治理须绑定必然触发的时刻——每写入=结构闸(阻塞)、commit/session 
+        收尾=语义+行为审(标记)、升级给人=残渣;下一步交付触发(commit pre-hook 跑 check、session 收尾挂 
+        audit+warden)而非再加能力。
+      affected-slots: []
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: '2026-07-22'
+      verified: '2026-07-22'
+      reason: 记录治理主线决策 + 本次 dogfood 实证数据

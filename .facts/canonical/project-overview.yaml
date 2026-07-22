@@ -52,11 +52,11 @@ slots:
       updated: "2026-01-01"
       verified: "2026-01-01"
   scope:
-    value: Python CLI (typer) + MCP server, ~370 tests
+    value: Python CLI (typer) + MCP server, ~461 tests
     meta:
       source: human
       confidence: high
       status: active
-      updated: '2026-07-02'
-      verified: '2026-07-02'
-      reason: dogfood init
+      updated: '2026-07-22'
+      verified: '2026-07-22'
+      reason: 治理响应#4:更新过期计数 ~370→~461(pytest --co 核实)
