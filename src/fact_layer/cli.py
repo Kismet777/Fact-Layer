@@ -829,6 +829,82 @@ def suggest(
             console.print(f"  Post-check: {n_err} errors, {n_warn} warnings.")
 
 
+dep_app = typer.Typer(
+    name="dep",
+    help="Edit the dependency graph (edges between slots).",
+    no_args_is_help=True,
+)
+app.add_typer(dep_app)
+
+
+@dep_app.command("add")
+def dep_add(
+    source: Annotated[str, typer.Argument(help="Source slot, e.g. tech-stack.database")],
+    target: Annotated[str, typer.Argument(help="Target slot, e.g. data-model.database-type")],
+    edge_type: Annotated[
+        str,
+        typer.Argument(help="derives-from | constrains | references | implies | conflicts-with"),
+    ],
+) -> None:
+    """Add a dependency edge source -> target (both slots must exist)."""
+    from fact_layer.core.dep_editor import add_dependency
+    from fact_layer.core.registry import resolve_facts_dir
+
+    facts_dir = resolve_facts_dir()
+    if not facts_dir:
+        console.print("[red]No .facts/ directory found. Run 'fl init' first.[/red]")
+        raise typer.Exit(1)
+
+    try:
+        add_dependency(facts_dir, source, target, edge_type)
+    except (ValueError, FileNotFoundError) as e:
+        console.print(f"[red]{e}[/red]")
+        raise typer.Exit(1)
+
+    console.print(f"[green]Added edge {source} --{edge_type}--> {target}[/green]")
+
+
+@dep_app.command("rm")
+def dep_rm(
+    source: Annotated[str, typer.Argument(help="Source slot")],
+    target: Annotated[str, typer.Argument(help="Target slot")],
+) -> None:
+    """Remove a dependency edge source -> target (works on dangling edges too)."""
+    from fact_layer.core.dep_editor import remove_dependency
+    from fact_layer.core.registry import resolve_facts_dir
+
+    facts_dir = resolve_facts_dir()
+    if not facts_dir:
+        console.print("[red]No .facts/ directory found. Run 'fl init' first.[/red]")
+        raise typer.Exit(1)
+
+    if remove_dependency(facts_dir, source, target):
+        console.print(f"[green]Removed edge {source} -> {target}[/green]")
+    else:
+        console.print(f"[yellow]No edge {source} -> {target} found[/yellow]")
+        raise typer.Exit(1)
+
+
+@dep_app.command("list")
+def dep_list() -> None:
+    """List all dependency edges."""
+    from fact_layer.core.dep_editor import list_dependencies
+    from fact_layer.core.registry import resolve_facts_dir
+
+    facts_dir = resolve_facts_dir()
+    if not facts_dir:
+        console.print("[red]No .facts/ directory found. Run 'fl init' first.[/red]")
+        raise typer.Exit(1)
+
+    graph = list_dependencies(facts_dir)
+    if not graph.static:
+        console.print("[dim]No dependency edges.[/dim]")
+        return
+    for rule in graph.static:
+        for t in rule.targets:
+            console.print(f"  {rule.source} --{t.type}--> {t.slot}")
+
+
 eval_app = typer.Typer(
     name="eval",
     help="Eval trace logging and analysis for measuring FL effectiveness.",

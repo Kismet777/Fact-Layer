@@ -158,6 +158,108 @@ def _resolve_slot(
     return str(sv.value), sv.meta.updated
 
 
+def _check_slot_duplicates(
+    categories: dict[str, CategoryFile],
+    enabled: dict,
+    filter_category: str | None,
+) -> list[CheckIssue]:
+    """B-003: two active slot ids in one category that differ only by case or by
+    '-'/'_' are almost certainly the same fact duplicated (the residue of the
+    underscore-slot-id bug, where an empty template stub coexists with a filled
+    underscore twin). Deterministic, separator/case-only — genuinely distinct ids
+    (framework vs cli_framework) are left to the LLM audit."""
+    issues: list[CheckIssue] = []
+
+    for cat_name in enabled:
+        if filter_category and cat_name != filter_category:
+            continue
+        cat = categories.get(cat_name)
+        if not cat:
+            continue
+
+        groups: dict[str, list[str]] = {}
+        for slot_id, sv in cat.slots.items():
+            if sv.meta.status not in ACTIVE_STATUSES:
+                continue
+            norm = slot_id.lower().replace("-", "_")
+            groups.setdefault(norm, []).append(slot_id)
+
+        for ids in groups.values():
+            if len(ids) > 1:
+                variants = ", ".join(sorted(ids))
+                issues.append(CheckIssue(
+                    category_name=cat_name,
+                    check_type="slot-duplicate",
+                    severity=Severity.WARNING,
+                    slot=f"{cat_name}.{sorted(ids)[0]}",
+                    message=f"{cat_name}: duplicate slot ids differing only by case or '-'/'_': {variants}",
+                    detail="consolidate: migrate the value into one, deprecate the other",
+                ))
+
+    return issues
+
+
+def _slot_exists(slot_ref: str, categories: dict[str, CategoryFile]) -> bool:
+    """True if slot_ref ('cat.slot-id') resolves to a slot that actually exists."""
+    parts = slot_ref.split(".", 1)
+    if len(parts) != 2:
+        return False
+    cat_name, slot_id = parts
+    cat = categories.get(cat_name)
+    return bool(cat and slot_id in cat.slots)
+
+
+def _check_dependency_integrity(
+    graph: DependencyGraph,
+    categories: dict[str, CategoryFile],
+    enabled: dict,
+    filter_category: str | None,
+) -> list[CheckIssue]:
+    """B-001: a dependency edge whose endpoint slot does not exist is a dangling
+    edge — a structural defect that must be caught deterministically, not left to
+    the LLM audit. Only endpoints in *enabled* categories are checked; edges into
+    disabled categories are dormant, not dangling."""
+    issues: list[CheckIssue] = []
+    enabled_cats = set(enabled.keys())
+
+    for rule in graph.static:
+        source_cat = rule.source.split(".")[0]
+        if source_cat not in enabled_cats:
+            continue
+        if filter_category and source_cat != filter_category:
+            continue
+
+        if not _slot_exists(rule.source, categories):
+            issues.append(CheckIssue(
+                category_name=source_cat,
+                check_type="dependency-integrity",
+                severity=Severity.ERROR,
+                slot=rule.source,
+                message=f"{rule.source} — dependency edge source slot does not exist (dangling edge)",
+                detail="remove the edge with 'fl dep rm', or create the slot",
+            ))
+            continue  # source missing: the whole rule is dangling, skip its targets
+
+        for target in rule.targets:
+            target_cat = target.slot.split(".")[0]
+            if target_cat not in enabled_cats:
+                continue
+            if not _slot_exists(target.slot, categories):
+                issues.append(CheckIssue(
+                    category_name=source_cat,
+                    check_type="dependency-integrity",
+                    severity=Severity.ERROR,
+                    slot=target.slot,
+                    message=(
+                        f"{target.slot} — dependency edge target slot does not exist"
+                        f" (dangling edge from {rule.source})"
+                    ),
+                    detail="remove the edge with 'fl dep rm', or create the slot",
+                ))
+
+    return issues
+
+
 def _check_dependencies(
     graph: DependencyGraph,
     categories: dict[str, CategoryFile],
@@ -271,6 +373,8 @@ def run_check(
     issues: list[CheckIssue] = []
     issues.extend(_check_structural(config, categories, enabled, filter_category))
     issues.extend(_check_staleness(config, categories, enabled, today, filter_category))
+    issues.extend(_check_slot_duplicates(categories, enabled, filter_category))
+    issues.extend(_check_dependency_integrity(graph, categories, enabled, filter_category))
     issues.extend(_check_dependencies(graph, categories, enabled, filter_category))
     issues.extend(_check_decisions(categories, enabled, filter_category))
 

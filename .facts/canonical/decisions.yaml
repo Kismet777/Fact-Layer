@@ -47,16 +47,20 @@ slots:
       date: '2026-07-22'
       status: active
       summary: FL 提供治理能力(check/audit/impact/未来 warden)但均为自选手动 → 自选=缺席。dogfood 
-        实证(2026-07-22):手动跑一次 check+audit 即抓 6 个真问题——1 条本 session 漂移(blockers 与 
-        focus 矛盾)+ 3 条静默沉淀历史问题(2 悬空依赖边、1 测试计数过期)+ 2 条工具缺口(fl check 
-        漏检悬空边、无依赖边编辑接口)。结论:治理须绑定必然触发的时刻——每写入=结构闸(阻塞)、commit/session 
-        收尾=语义+行为审(标记)、升级给人=残渣;下一步交付触发(commit pre-hook 跑 check、session 收尾挂 
-        audit+warden)而非再加能力。
+        实证(2026-07-22 手动跑一次 check+audit):抓到 1 条本 session 漂移(blockers 与 focus 
+        矛盾,已修)+ 2 条历史静默(测试计数过期已修;连字符/下划线重复 slot=Bug B 残留=B-003)+ 2 条工具能力缺口(fl 
+        check 无悬空边检测=B-001、无依赖边编辑接口=B-002,均已于 2026-07-23 TDD 
+        补齐)。⚠勘误(2026-07-23):初记把 B-003 说成'2 条悬空依赖边',是照字面信了 LLM audit 措辞'no such 
+        slot exists'——核实后 slot 实际存在(空 stub)、真值在下划线孪生,无结构悬空边,fl check 报 0 
+        正确。教训:发现的描述必须核实到结构层,audit 
+        自然语言判词不可照字面入账。结论不变:治理须绑定必然触发的时刻(每写入=结构闸阻塞、commit/session 
+        收尾=语义+行为审标记、升级给人=残渣),下一步交付触发(commit pre-hook 跑 check)而非再加能力。
       affected-slots: []
     meta:
       source: human
       confidence: high
       status: active
-      updated: '2026-07-22'
-      verified: '2026-07-22'
-      reason: 记录治理主线决策 + 本次 dogfood 实证数据
+      updated: '2026-07-23'
+      verified: '2026-07-23'
+      reason: 纠正 dogfood 证据:'悬空边'实为重复slot(B-003);记入 audit 措辞不可照字面的教训;B-001/B-002
+        已修

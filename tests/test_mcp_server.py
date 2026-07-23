@@ -53,6 +53,7 @@ def facts_dir(tmp_path: Path, monkeypatch) -> Path:
         "category": "tech-stack", "tier": "stable",
         "slots": {
             "language": _make_slot("Python 3.12"),
+            "framework": _make_slot("FastAPI 0.111"),
             "database": _make_slot("PostgreSQL 16"),
         },
     })
@@ -146,9 +147,10 @@ class TestFactsAdd:
 class TestFactsList:
     def test_returns_active_slots(self, facts_dir):
         result = facts_list(category="tech-stack")
-        assert len(result) == 2
+        assert len(result) == 3
         slots = {s["slot"] for s in result}
         assert "tech-stack.language" in slots
+        assert "tech-stack.framework" in slots
         assert "tech-stack.database" in slots
 
     def test_excludes_superseded(self, facts_dir):

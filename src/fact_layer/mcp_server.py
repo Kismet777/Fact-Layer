@@ -426,6 +426,62 @@ def facts_audit(model: str | None = None) -> dict:
     return result.model_dump(mode="json")
 
 
+@mcp.tool()
+def facts_dep_add(source: str, target: str, edge_type: str) -> dict:
+    """Add a dependency edge source -> target in the dependency graph.
+
+    Both endpoint slots must already exist (a dangling edge is refused).
+    edge_type is one of: derives-from | constrains | references | implies |
+    conflicts-with.
+
+    Args:
+        source: Source slot, e.g. 'tech-stack.database'.
+        target: Target slot, e.g. 'data-model.database-type'.
+        edge_type: Relationship type (see above).
+    """
+    facts_dir = _require_facts_dir()
+
+    from fact_layer.core.dep_editor import add_dependency
+
+    add_dependency(facts_dir, source, target, edge_type)
+    return {"added": True, "source": source, "target": target, "type": edge_type}
+
+
+@mcp.tool()
+def facts_dep_remove(source: str, target: str) -> dict:
+    """Remove the dependency edge source -> target.
+
+    Works on dangling edges (endpoint slot missing) too — that is how a dangling
+    edge flagged by facts_check gets repaired. Returns removed=false if absent.
+
+    Args:
+        source: Source slot of the edge.
+        target: Target slot of the edge.
+    """
+    facts_dir = _require_facts_dir()
+
+    from fact_layer.core.dep_editor import remove_dependency
+
+    removed = remove_dependency(facts_dir, source, target)
+    return {"removed": removed, "source": source, "target": target}
+
+
+@mcp.tool()
+def facts_dep_list() -> dict:
+    """List all dependency edges as {source, target, type} records."""
+    facts_dir = _require_facts_dir()
+
+    from fact_layer.core.dep_editor import list_dependencies
+
+    graph = list_dependencies(facts_dir)
+    edges = [
+        {"source": rule.source, "target": t.slot, "type": t.type}
+        for rule in graph.static
+        for t in rule.targets
+    ]
+    return {"edges": edges}
+
+
 def main():
     mcp.run()
 

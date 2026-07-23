@@ -60,6 +60,7 @@ def facts_dir(tmp_path: Path) -> Path:
         "category": "tech-stack", "tier": "stable",
         "slots": {
             "language": _slot("Python 3.12"),
+            "framework": _slot("FastAPI 0.111"),
             "database": _slot("MongoDB 7", updated="2026-06-09"),
         },
     })
@@ -245,6 +246,9 @@ class TestSuggestResult:
             "category": "work-in-progress", "tier": "working",
             "slots": {"focus": _slot("nothing")},
         })
+        # this minimal project keeps only the slots above; give it a matching
+        # (empty) dependency graph so the template's edges don't dangle.
+        dump_yaml(facts / "dependencies.yaml", {"static": []})
 
         from fact_layer.core.suggest_cmd import run_suggest
 

@@ -114,13 +114,19 @@ FL 不做聚类、不做 agent 调优判断。**FL 管理事实，不消费事�
 
 ---
 
-## 十、首批实录（2026-07-22 治理 dogfood 钓出，实现后作为种子数据导入）
+## 十、首批实录（2026-07-22 治理 dogfood 钓出）
 
-> 这两条不是假想样例，是本 spec 讨论期间「手动跑一次 `fl check`+`fl audit`」真实钓出的 FL 工具自身缺陷。当前先寄存于 `work-in-progress.known-issues`，bug-log 实现后迁入。
+> 本 spec 讨论期间「手动跑一次 `fl check`+`fl audit`」真实钓出的 FL 工具缺陷。
+> ⚠️ **勘误（2026-07-23 核实后修订）**：初记把 B-001/B-003 当成「悬空边（边指向不存在的槽）」，
+> 是**照字面信了 LLM audit 的措辞**（audit 说 "no such slot exists"，实指「slot 无*值*」）。
+> 结构核实后：`tech-stack.framework` / `build-deploy.docker` **slot 确实存在**（空的连字符 stub），
+> 真值在**下划线命名的重复 slot**（`cli_framework` / `package_manager` / `package_name`，Bug B 残留）。
+> 故无结构性悬空边，`fl check` 报 0 errors 是**正确**的。B-001 是真能力增益（并非修此处），B-003 才是本 repo 的真 bug。
 
 | bug | what | where | how_fixed | class | status |
 |---|---|---|---|---|---|
-| B-001 | `fl check` 漏检悬空依赖边：边指向不存在的槽（`build-deploy.docker`、`tech-stack.framework`）是纯结构事实，却只有 `fl audit`(LLM) 抓到、`fl check` 报 0 errors | `core/checker.py` 依赖校验分支 | 待定（应在确定性 check 加「边 target 必须是已存在 slot」的校验，不劳 LLM） | 检查覆盖缺口 | 未修正 |
-| B-002 | 无依赖边编辑接口：CLI/MCP 均无增/删/改 `dependencies.yaml` 边的命令 → B-001 的悬空边无法经 FL 接口修复，只能违铁律手改 | 缺失接口（editor 层无 edge op） | 待定（FL-025 类：补 `fl dep add/rm` + MCP 对等） | 接口缺口 | 未修正 |
+| B-001 | `fl check` 原本**无悬空依赖边检测**（边指向真正不存在的槽时静默跳过、只 `fl audit` 才可能提及）——能力缺口 | `core/checker.py:_check_dependencies` 遇缺失端点 `continue` | ✅ 已修（2026-07-23）：新增 `_check_dependency_integrity`，端点 slot 不存在→ERROR + tests | 检查覆盖缺口 | 已修正 |
+| B-002 | 无依赖边编辑接口：CLI/MCP 均无增/删/改 `dependencies.yaml` 边的命令 → 悬空/错指的边只能违铁律手改 | 缺失接口（editor 层无 edge op） | ✅ 已修（2026-07-23）：`core/dep_editor.py` + `fl dep add/rm/list` + `facts_dep_*` + tests | 接口缺口 | 已修正 |
+| B-003 | **连字符/下划线重复 slot（Bug B 残留）**：同类别内 `package-manager`(空) 与 `package_manager`(有值) 并存；`framework`(空)/`cli_framework`(有值) 同病。空 stub 被依赖边指向，真值在下划线孪生里。`fl check` 不检测此类重复 | `.facts/canonical/tech-stack.yaml`、`build-deploy.yaml`；过去 Bug B 修 export 未去重数据 | 进行中（2026-07-23）：加 `_check_slot_duplicates`（同类别 hyphen/underscore 变体重复→WARNING）；数据清理另议 | 数据损坏 + 检查缺口 | 部分修正 |
 
-**元观察**：B-001 + B-002 复合出一个尴尬——治理动作**发现了**不一致（悬空边），却**没有合规路径去修**（无编辑接口）。这本身是「能力×触发」之外的第三条：**发现 → 响应之间还得有可用的修复接口**，否则治理停在「看见但动不了」。
+**元观察（保留，仍成立）**：治理动作**发现了**不一致，却一度**没有合规路径去修**（无编辑接口，B-002）。「能力×触发」之外的第三条：**发现 → 响应之间还得有可用的修复接口**，否则治理停在「看见但动不了」。**外加第四条（本次教训）**：发现的**描述必须核实到结构层**——LLM audit 的自然语言判词（"no such slot"）不可照字面入账，否则 bug 记录本身就失真（我正是这么把 B-001/B-003 记成了「悬空边」）。

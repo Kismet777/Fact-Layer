@@ -46,6 +46,7 @@ def facts_dir(tmp_path: Path) -> Path:
         "category": "tech-stack", "tier": "stable",
         "slots": {
             "language": _make_slot("Python 3.12"),
+            "framework": _make_slot("FastAPI 0.111"),
             "database": _make_slot("PostgreSQL 16", updated="2026-06-09"),
         },
     })
@@ -200,6 +201,112 @@ class TestDependencyChecks:
         result = run_check(facts_dir, today=date(2026, 6, 9))
         dep_issues = [i for i in result.issues if i.check_type == "dependency"]
         assert len(dep_issues) == 0
+
+
+class TestDependencyIntegrity:
+    """B-001: dangling dependency edges (endpoint slot does not exist) must be
+    caught deterministically by fl check, not silently skipped."""
+
+    def test_clean_fixture_has_no_integrity_issues(self, facts_dir):
+        result = run_check(facts_dir, today=date(2026, 6, 9))
+        integrity = [i for i in result.issues if i.check_type == "dependency-integrity"]
+        assert integrity == []
+
+    def test_dangling_target_slot_is_error(self, facts_dir):
+        # drop build-deploy.docker -> edge tech-stack.database -> build-deploy.docker dangles at target
+        dump_yaml(facts_dir / "canonical" / "build-deploy.yaml", {
+            "category": "build-deploy", "tier": "dynamic",
+            "slots": {"build-tool": _make_slot("hatch")},
+        })
+        result = run_check(facts_dir, today=date(2026, 6, 9))
+        dangling = [
+            i for i in result.issues
+            if i.check_type == "dependency-integrity" and "build-deploy.docker" in i.message
+        ]
+        assert len(dangling) == 1
+        assert dangling[0].severity == Severity.ERROR
+
+    def test_dangling_source_slot_is_error(self, facts_dir):
+        # drop tech-stack.framework -> edge tech-stack.framework -> ... dangles at source
+        dump_yaml(facts_dir / "canonical" / "tech-stack.yaml", {
+            "category": "tech-stack", "tier": "stable",
+            "slots": {
+                "language": _make_slot("Python 3.12"),
+                "database": _make_slot("PostgreSQL 16"),
+            },
+        })
+        result = run_check(facts_dir, today=date(2026, 6, 9))
+        dangling = [
+            i for i in result.issues
+            if i.check_type == "dependency-integrity" and "tech-stack.framework" in i.message
+        ]
+        assert len(dangling) == 1
+        assert dangling[0].severity == Severity.ERROR
+
+    def test_edge_to_disabled_category_not_flagged(self, facts_dir):
+        # template deps reference api-contracts.style, but api-contracts is not enabled
+        # here -> dormant edge, must NOT be reported as dangling.
+        result = run_check(facts_dir, today=date(2026, 6, 9))
+        api = [
+            i for i in result.issues
+            if i.check_type == "dependency-integrity" and "api-contracts" in i.message
+        ]
+        assert api == []
+
+
+class TestSlotDuplicates:
+    """B-003: two active slot ids in one category that differ only by case or
+    '-'/'_' are near-certainly the same fact duplicated (the Bug B residue) —
+    flag them so one can be consolidated."""
+
+    def test_hyphen_underscore_variant_flagged(self, facts_dir):
+        dump_yaml(facts_dir / "canonical" / "build-deploy.yaml", {
+            "category": "build-deploy", "tier": "dynamic",
+            "slots": {
+                "package-manager": _make_slot(""),
+                "package_manager": _make_slot("hatch"),
+            },
+        })
+        result = run_check(facts_dir, today=date(2026, 6, 9))
+        dups = [i for i in result.issues if i.check_type == "slot-duplicate"]
+        assert len(dups) == 1
+        assert dups[0].severity == Severity.WARNING
+        assert "package-manager" in dups[0].message
+        assert "package_manager" in dups[0].message
+
+    def test_distinct_slots_not_flagged(self, facts_dir):
+        # framework vs cli_framework are genuinely different ids (not separator
+        # variants) — a deterministic check must NOT flag them (that's audit's job).
+        dump_yaml(facts_dir / "canonical" / "tech-stack.yaml", {
+            "category": "tech-stack", "tier": "stable",
+            "slots": {
+                "language": _make_slot("Python"),
+                "framework": _make_slot(""),
+                "cli_framework": _make_slot("typer"),
+                "database": _make_slot("PG"),
+            },
+        })
+        result = run_check(facts_dir, today=date(2026, 6, 9))
+        dups = [i for i in result.issues if i.check_type == "slot-duplicate"]
+        assert dups == []
+
+    def test_deprecated_variant_not_flagged(self, facts_dir):
+        # once the empty variant is deprecated, the duplicate is resolved -> no warning
+        dump_yaml(facts_dir / "canonical" / "build-deploy.yaml", {
+            "category": "build-deploy", "tier": "dynamic",
+            "slots": {
+                "package-manager": _make_slot("", status="superseded"),
+                "package_manager": _make_slot("hatch"),
+            },
+        })
+        result = run_check(facts_dir, today=date(2026, 6, 9))
+        dups = [i for i in result.issues if i.check_type == "slot-duplicate"]
+        assert dups == []
+
+    def test_clean_fixture_no_slot_duplicates(self, facts_dir):
+        result = run_check(facts_dir, today=date(2026, 6, 9))
+        dups = [i for i in result.issues if i.check_type == "slot-duplicate"]
+        assert dups == []
 
 
 class TestDecisionChecks:

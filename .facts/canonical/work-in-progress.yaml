@@ -81,21 +81,23 @@ slots:
       reason: 登记本次需求树文档同步
   known-issues:
     value:                   # Known bugs or debt items
-    - 运行中的 fl-mcp 是旧进程:需重启才暴露本 session 新增的 facts_search 工具、facts_export 的 
-      outline 参数,以及此前的 facts_add/facts_export since;CLI 与库已用新代码
+    - 运行中的 fl-mcp 是旧进程:需重启才暴露本 session 前后新增的 MCP 
+      工具(facts_search/facts_add、facts_dep_add/remove/list)、facts_export 的 
+      outline/since 参数;CLI 与库已用新代码
     - architecture-philosophy.md 待重写勿提(未跟踪);把 source-of-record/derived_from 
       当已实现叙述,与数据模型不符(philosophy↔code 漂移)
     - search 为离线子串:不做语义/embeddings(会引入存储派生物+软推理,违原则2/7);CJK 连续查询走整段子串,多词AND需空格分隔
     - delta v1 已知边界:date 颗粒度(同日重复带上、绝不漏)、不报删除;精确到条+报增删待 FL-022
     - search_to_get_rate 为槽级、顺序不敏感(用 by_slot_op 共现,非时间戳);search评价L4注入式演习未建(§5.3)
-    - '[BUG·发现于2026-07-22治理dogfood] fl check 漏检悬空依赖边:边指向不存在的槽(如 build-deploy.docker、tech-stack.framework)是纯结构事实,却只有
-      fl audit(LLM)抓到、fl check 报 0 errors;确定性依赖校验覆盖缺口。FL-028 bug-log 首批实录候选'
-    - '[BUG·发现于2026-07-22治理dogfood] 无依赖边编辑接口:CLI/MCP 均无增/删/改 dependencies.yaml 边的命令
-      → 上条悬空边无法经 FL 接口修复,只能违铁律手改;FL-025 类结构性缺口(与类别生命周期同病)'
+    - "[BUG·B-003·2026-07-23] 连字符/下划线重复 slot(Bug B 残留):_check_slot_duplicates 已加(同类别仅大小写/'-'‸'_'差异的
+      active slot→WARNING),live 检出2处待清理:tech-stack.package-manager(空)/package_manager('hatch/pip')、testing.coverage-target('461')/coverage_target('376'stale)。⚠须区分:framework(空)/cli_framework('typer')及
+      data_modeling/yaml_library/llm_sdk/package_name 等下划线名 slot 属'孤儿空stub + 违 kebab
+      约定的下划线 slot',非分隔符变体,B-003 不抓(归 audit 或另立约定检查)。数据清理(迁移值+deprecate 冗余)另议。⚠勘误:此前误记为'悬空边',系照字面信
+      audit 措辞'no such slot'"
     meta:
       source: human
       confidence: high
       status: active
-      updated: "2026-07-22"
-      verified: "2026-07-22"
-      reason: '治理响应#1:登记本次 dogfood 钓出的两条工具缺口,防其再静默沉淀'
+      updated: "2026-07-23"
+      verified: "2026-07-23"
+      reason: '纠正 B-003 描述:区分分隔符变体重复(B-003抓,live 2处)vs 孤儿空stub/违约定下划线slot(B-003不抓)'
