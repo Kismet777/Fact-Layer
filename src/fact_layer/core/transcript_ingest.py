@@ -89,6 +89,28 @@ def parse_transcript(path: str | Path) -> list[dict]:
     return rows
 
 
+def _cwd_from_rows(rows: list[dict]) -> str | None:
+    """First non-empty per-record `cwd` — the directory the session ran in."""
+    for r in rows:
+        cwd = r.get("cwd")
+        if isinstance(cwd, str) and cwd:
+            return cwd
+    return None
+
+
+def facts_dir_from_transcript(rows: list[dict]) -> Path | None:
+    """Route to the .facts/ of the project the session actually ran in (its cwd).
+
+    Returns None when the session's own cwd resolves to no .facts/. Callers must
+    NOT fall back to the ingest command's cwd: that misroutes a cross-project
+    transcript into whatever project the operator happens to be standing in
+    (root cause of the 2026-08-10 jobcity-recsys→贷后 eval pollution)."""
+    cwd = _cwd_from_rows(rows)
+    if cwd:
+        return resolve_facts_dir(Path(cwd))
+    return None
+
+
 def _message_text(rec: dict) -> str:
     content = (rec.get("message") or {}).get("content")
     if isinstance(content, str):
@@ -356,14 +378,18 @@ def ingest_transcript(
     """
     report: dict = {"written": [], "skipped": [], "no_retrieval": [], "errors": []}
 
-    facts_dir = facts_dir or resolve_facts_dir()
-    if not facts_dir:
-        report["errors"].append("no .facts/ directory")
-        return report
-
     rows = parse_transcript(transcript_path)
     if not rows:
         report["errors"].append("empty or unreadable transcript")
+        return report
+
+    if facts_dir is None:
+        facts_dir = facts_dir_from_transcript(rows)
+    if not facts_dir:
+        report["errors"].append(
+            "no .facts/ for the session's project (transcript cwd unresolved); "
+            "refusing to fall back to the ingest command's cwd"
+        )
         return report
 
     turns = segment_turns(rows)

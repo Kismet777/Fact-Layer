@@ -85,6 +85,51 @@ def load_traces(
     return traces
 
 
+def prune_traces(
+    facts_dir: Path,
+    sessions: list[str],
+    *,
+    dry_run: bool = False,
+) -> dict:
+    """Remove eval trace files whose session_id matches any of `sessions`.
+
+    `sessions` entries are matched with fnmatch (exact ids or globs). Used to
+    excise misrouted / cross-project traces from an eval store. Safety: an empty
+    `sessions` list is a no-op — this never mass-deletes without explicit targets.
+
+    Returns {"matched": [{file, session, turn}], "removed": [file, ...]}. With
+    dry_run=True nothing is deleted; `matched` still lists what would be removed.
+    """
+    report: dict = {"matched": [], "removed": []}
+    if not sessions:
+        return report
+
+    eval_dir = facts_dir / "eval"
+    if not eval_dir.is_dir():
+        return report
+
+    for f in sorted(eval_dir.glob("*.yaml")):
+        data = _load_yaml(f)
+        if not data:
+            continue
+        try:
+            trace = EvalTrace.model_validate(data)
+        except Exception:
+            continue
+
+        if not any(fnmatch(trace.session_id, pat) for pat in sessions):
+            continue
+
+        report["matched"].append(
+            {"file": f.name, "session": trace.session_id, "turn": trace.turn}
+        )
+        if not dry_run:
+            f.unlink()
+            report["removed"].append(f.name)
+
+    return report
+
+
 def _extract_slot_ref(step: EvalStep) -> str | None:
     if step.type != "tool_call" or step.tool not in ("facts_get", "facts_list"):
         return None

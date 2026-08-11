@@ -293,3 +293,27 @@ class TestIngestRollout:
         p.write_text("")
         report = ingest_rollout(p, facts_dir=facts_dir)
         assert report["errors"]
+
+
+class TestCodexRoutingNoFallback:
+    def test_no_fallback_to_command_cwd(self, tmp_path, monkeypatch):
+        """When the session's own cwd resolves to no .facts/, routing must return
+        None — never silently fall back to whatever project the ingest command was
+        run from (guards cross-project eval pollution)."""
+        standing = tmp_path / "standing"
+        (standing / ".facts").mkdir(parents=True)
+        (standing / ".facts" / "framework.yaml").write_text("version: 1\n")
+        monkeypatch.chdir(standing)
+        foreign = tmp_path / "jobcity"
+        foreign.mkdir()  # no .facts/ up its tree
+        rows = [_session_meta("sess-x", str(foreign))]
+
+        assert codex_ingest.facts_dir_from_rollout(rows) is None
+
+    def test_routes_to_session_cwd_when_resolvable(self, tmp_path):
+        proj = tmp_path / "proj"
+        (proj / ".facts").mkdir(parents=True)
+        (proj / ".facts" / "framework.yaml").write_text("version: 1\n")
+        rows = [_session_meta("sess-y", str(proj))]
+
+        assert codex_ingest.facts_dir_from_rollout(rows) == proj / ".facts"

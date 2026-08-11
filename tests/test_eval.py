@@ -2,7 +2,12 @@ from pathlib import Path
 
 import pytest
 
-from fact_layer.core.eval_cmd import compute_eval_stats, load_traces, save_trace
+from fact_layer.core.eval_cmd import (
+    compute_eval_stats,
+    load_traces,
+    prune_traces,
+    save_trace,
+)
 from fact_layer.core.writer import dump_yaml
 from fact_layer.models.eval import (
     BypassInfo,
@@ -227,6 +232,53 @@ class TestLoadTraces:
         traces = load_traces(eval_dir, after="2026-06-24")
         assert len(traces) == 1
         assert traces[0].session_id == "new"
+
+
+class TestPruneTraces:
+    def test_prune_removes_matching_session_keeps_others(self, eval_dir: Path):
+        save_trace(eval_dir, _make_trace(session_id="foreign-1", timestamp="2026-07-03T09:18:07"))
+        save_trace(eval_dir, _make_trace(session_id="贷后-real", timestamp="2026-07-04T09:18:07"))
+
+        report = prune_traces(eval_dir, sessions=["foreign-1"])
+
+        assert len(report["removed"]) == 1
+        remaining = load_traces(eval_dir)
+        assert [t.session_id for t in remaining] == ["贷后-real"]
+
+    def test_prune_dry_run_removes_nothing(self, eval_dir: Path):
+        save_trace(eval_dir, _make_trace(session_id="foreign-1"))
+
+        report = prune_traces(eval_dir, sessions=["foreign-1"], dry_run=True)
+
+        assert [m["session"] for m in report["matched"]] == ["foreign-1"]
+        assert report["removed"] == []
+        assert len(load_traces(eval_dir)) == 1  # still there
+
+    def test_prune_multiple_sessions(self, eval_dir: Path):
+        for sid in ("f1", "f2", "keep"):
+            save_trace(eval_dir, _make_trace(session_id=sid, timestamp=f"2026-07-0{len(sid)}T09:00:00"))
+
+        report = prune_traces(eval_dir, sessions=["f1", "f2"])
+
+        assert len(report["removed"]) == 2
+        assert [t.session_id for t in load_traces(eval_dir)] == ["keep"]
+
+    def test_prune_empty_session_list_is_noop(self, eval_dir: Path):
+        save_trace(eval_dir, _make_trace(session_id="a"))
+
+        report = prune_traces(eval_dir, sessions=[])
+
+        assert report["removed"] == []
+        assert len(load_traces(eval_dir)) == 1  # never mass-deletes without targets
+
+    def test_prune_glob_session(self, eval_dir: Path):
+        save_trace(eval_dir, _make_trace(session_id="jobcity-recsys-abc", timestamp="2026-07-03T09:00:00"))
+        save_trace(eval_dir, _make_trace(session_id="贷后-x", timestamp="2026-07-04T09:00:00"))
+
+        report = prune_traces(eval_dir, sessions=["jobcity-recsys-*"])
+
+        assert len(report["removed"]) == 1
+        assert [t.session_id for t in load_traces(eval_dir)] == ["贷后-x"]
 
 
 class TestComputeStats:

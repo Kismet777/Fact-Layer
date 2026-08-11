@@ -245,13 +245,16 @@ def session_id_from_rollout(rows: list[dict], path: str | Path) -> str:
 
 
 def facts_dir_from_rollout(rows: list[dict]) -> Path | None:
-    """Route to the .facts/ of the project the Codex session ran in (session_meta.cwd)."""
+    """Route to the .facts/ of the project the Codex session ran in (session_meta.cwd).
+
+    Returns None when the session's own cwd resolves to no .facts/ — never falls
+    back to the ingest command's cwd, which would misroute a cross-project rollout
+    into whatever project the operator happens to be standing in (root cause of the
+    2026-08-10 cross-project eval pollution)."""
     cwd = _session_meta(rows).get("cwd")
     if isinstance(cwd, str) and cwd:
-        fd = resolve_facts_dir(Path(cwd))
-        if fd:
-            return fd
-    return resolve_facts_dir()
+        return resolve_facts_dir(Path(cwd))
+    return None
 
 
 def locate_latest_rollout(

@@ -1057,6 +1057,73 @@ def ingest(
         console.print("[dim]No turns to ingest.[/dim]")
 
 
+@eval_app.command(name="prune")
+def prune_cmd(
+    session: Annotated[
+        Optional[list[str]],
+        typer.Option("--session", "-s", help="Session id or glob to remove (repeatable). Required."),
+    ] = None,
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Preview what would be removed; delete nothing"),
+    ] = False,
+    yes: Annotated[
+        bool,
+        typer.Option("--yes", "-y", help="Skip the confirmation prompt"),
+    ] = False,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Output as JSON"),
+    ] = False,
+) -> None:
+    """Remove eval traces by session id/glob (e.g. excise misrouted cross-project turns).
+
+    Safety: requires at least one --session and never mass-deletes; always previews the
+    matched traces and asks for confirmation (skip with --yes). Use --dry-run to preview only.
+    """
+    import json as json_mod
+
+    from fact_layer.core.eval_cmd import prune_traces
+    from fact_layer.core.registry import resolve_facts_dir
+
+    facts_dir = resolve_facts_dir()
+    if not facts_dir:
+        console.print("[red]No .facts/ directory found. Run 'fl init' first.[/red]")
+        raise typer.Exit(1)
+
+    sessions = session or []
+    if not sessions:
+        console.print("[red]--session is required (one or more; supports globs). Refusing to prune without targets.[/red]")
+        raise typer.Exit(1)
+
+    preview = prune_traces(facts_dir, sessions, dry_run=True)
+    matched = preview["matched"]
+    if not matched:
+        console.print("No traces match the given session(s).")
+        raise typer.Exit(0)
+
+    if dry_run:
+        if json_output:
+            print(json_mod.dumps(preview, indent=2, ensure_ascii=False))
+        else:
+            console.print(f"[yellow]Would remove {len(matched)} trace(s):[/yellow]")
+            for m in matched:
+                console.print(f"  {m['session']} turn-{m['turn']:03d}  ({m['file']})")
+        raise typer.Exit(0)
+
+    if not yes:
+        console.print(f"[yellow]About to remove {len(matched)} trace(s):[/yellow]")
+        for m in matched:
+            console.print(f"  {m['session']} turn-{m['turn']:03d}")
+        typer.confirm("Proceed?", abort=True)
+
+    report = prune_traces(facts_dir, sessions, dry_run=False)
+    if json_output:
+        print(json_mod.dumps(report, indent=2, ensure_ascii=False))
+    else:
+        console.print(f"[green]Removed {len(report['removed'])} trace(s).[/green]")
+
+
 @eval_app.command(name="list")
 def list_cmd(
     session: Annotated[
