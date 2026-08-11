@@ -4,25 +4,34 @@ tier: working
 
 slots:
   focus:
-    value: "FL 工具演进线:facts_search(FL-021 L1)+ export--outline + search 评价指标 已全部 TDD
-      实现并通过全量测试(461 passed)。闭环 export(--outline 目录)→search(模糊)→get(精确) 已打通。"        # What you're working on right now
+    value: "FL 工具演进线已推进到 HEAD 4e3f0d5,全量 491 tests 绿、工作树 clean。已落地闭链:search 闭环(FL-021
+      L1 facts_search + export --outline + search 评价指标,b627f69)→ FL-024a/FL-028 两份
+      spec + 一次治理 dogfood(81c0165)→ B-001/002/003(4e3f0d5:fl check 确定性检测真悬空依赖边 / fl
+      dep add·rm·list 依赖边编辑接口 / fl check 检测分隔符·大小写变体重复 slot)。当前处'两份 spec 待用户审' + '治理触发(fl
+      check 接 pre-commit)尚未兑现' 的交界。"                                                # What you're working on right now
     meta:
       source: human
       confidence: high
       status: active
-      updated: "2026-07-17"
-      verified: "2026-07-17"
+      updated: "2026-08-10"
+      verified: "2026-08-10"
 
-      reason: 'session 2026-07-17: search 闭环包实现完成'
+      reason: '修真源漂移:focus 停在 2026-07-17 search 闭环(461 passed),未反映 81c0165/4e3f0d5(B-001/002/003,491
+        tests);A类规则3不搁置不一致'
   next-steps:
     value:                   # Immediate next actions
+    - 治理触发(governance-cadence 决策的真正下一步,'先建触发不建工具'的兑现):把 fl check 接进 commit 
+      pre-hook,让治理第一次自动 fire 而非靠记得跑
     - FL-024a session-log 兄弟结构 + fl handoff 投影视图:spec 
-      docs/plans/2026-07-17-session-log-and-handoff-view.md,待审;审后登记(需求树缺口表+decisions
+      docs/plans/2026-07-17-session-log-and-handoff-view.md,待用户审;审后登记(需求树缺口表+decisions
       槽)再 TDD。核心=append-only 兄弟结构非 slot、只存指针+指纹非正文、交接是投影非拷贝
     - FL-028 bug-log 缺陷知识层:spec 
-      docs/plans/2026-07-17-bug-log-defect-knowledge.md,待审;审后登记再 
+      docs/plans/2026-07-17-bug-log-defect-knowledge.md,待用户审;审后登记再 
       TDD。核心=知识层非工单层、store 小 refs 富(code锚点+指纹/eval trace/decision)、status 
       未修正→已修正永不删、同类检测与 bug×eval 审 agent 是 FL 外消费者
+    - B-003 两处重复 slot 数据清理:把下划线孪生(package_manager/coverage_target)的值迁进 kebab 
+      正名槽、deprecate 冗余,顺带孤儿空 stub;真数据迁移须逐槽确认保留哪个。+ B-004 约定检查:补 slot-id 违反 kebab
+      约定的下划线命名那半(framework/cli_framework/data_modeling 等),B-003 抓不到
     - 跨切 roadmap 统一 append-only-status 
       日志基座:session-log(024a)+bug-log(028)+warden 判定三者同形;次序=先落地前两个具体实现,待 warden 
       第三消费者到齐再抽取基座(候选=泛化 eval 层)。纲领:FL 只管理事实不消费事实
@@ -31,15 +40,17 @@ slots:
       SlotMeta/DependencyTarget 均无这些字段)
     - search 评价 L4(注入式演习,§5.3 空叶子)按需单独立项:放已知事实测召回,答案外部给定,勿用 search 自证 search
     - FL 演进大件排期:FL-022 并发底座(P0)/FL-021 L3 文档式真源(P1)/FL-024 角色记忆/FL-023 
-      warden/FL-025 类别生命周期/FL-027 内外完整性对账/冷热分层
+      warden/FL-025 类别生命周期(依赖边编辑 B-002 已补一半,类别 enable/add 仍缺)/FL-027 
+      内外完整性对账/冷热分层
     meta:
       source: human
       confidence: high
       status: active
-      updated: "2026-07-17"
-      verified: "2026-07-17"
+      updated: "2026-08-10"
+      verified: "2026-08-10"
 
-      reason: '登记 FL-028 bug-log spec + 统一日志基座跨切 roadmap(待审)'
+      reason: '修真源漂移:next-steps 停在 2026-07-17;新增''fl check 接 pre-commit 治理触发''与''B-003
+        数据清理+B-004 kebab 约定检查'',FL-025 补注 B-002 已补一半'
   blockers:
     value:                   # What's blocking progress
     - 无硬阻塞。FL-024a(session-log/handoff)与 FL-028(bug-log)spec 
@@ -55,6 +66,15 @@ slots:
         session 改 next-steps/recent-changes 时漏改 blockers 所致,当场修(A类规则3不得搁置不一致)
   recent-changes:
     value:                   # Notable recent changes for agent context
+    - 2026-07-23(4e3f0d5)B-001/002/003 TDD 实现(491 tests 绿):B-001 fl check 
+      确定性检测真悬空依赖边(端点 slot 不存在→ERROR,_check_dependency_integrity);B-002 依赖边编辑 fl 
+      dep add·rm·list + MCP facts_dep_add/remove/list(add 校验端点、rm 不校验);B-003 fl 
+      check 检测分隔符·大小写变体重复 slot(WARNING,_check_slot_duplicates)。附诚实纠正:早先治理把 live 
+      空 stub 误当'悬空边',系照字面信 audit 措辞'no such slot';核实后 slot 存在(空连字符 
+      stub)、真值在下划线孪生里,无结构悬空边、fl check 报 0 正确
+    - 2026-07-22(81c0165)FL-024a/FL-028 两份 spec + 一次治理 dogfood:手动 fl check+audit
+      抓到 blockers 漂移并修、测试计数 376→461 核实修正、re-verify philosophy、立 
+      governance-cadence 决策(治理=能力×触发,先建触发不建工具)
     - 2026-07-17 需求树文档同步(docs/requirements-need-to-code.md):§1.3 facts_search / 
       §1.4 目录档(--outline) / §5.1 search 埋点 均 🔴🟡→✅,缺口表 3 行转✅(+新增 search 
       埋点行),§1.15 自顶向下审计例改为 facts_trace/值失真对账/注入式演习(仍空叶)
@@ -70,15 +90,15 @@ slots:
       by_slot_op 交叉表 + search_empty_rate + search_to_get_rate;显示在 fl eval 
       access-stats
     - 2026-07-16 delta 水位线 export(commit 86de58c)
-    - 已推 origin:FL-026 facts_add(3827683)、LLM单源(904adcf)、需求树+plans(15eb280)
     meta:
       source: human
       confidence: high
       status: active
-      updated: "2026-07-17"
-      verified: "2026-07-17"
+      updated: "2026-08-10"
+      verified: "2026-08-10"
 
-      reason: 登记本次需求树文档同步
+      reason: 修真源漂移:recent-changes 最新条停在 2026-07-17;补 81c0165(specs+治理dogfood)与 
+        4e3f0d5(B-001/002/003)两条,汰最旧的'已推origin FL-026'条
   known-issues:
     value:                   # Known bugs or debt items
     - 运行中的 fl-mcp 是旧进程:需重启才暴露本 session 前后新增的 MCP 
