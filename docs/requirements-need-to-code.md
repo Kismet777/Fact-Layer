@@ -270,8 +270,10 @@ FL 对这条根需求的回答，就是把"可信"拆成**四个可被守卫、�
 │     └── ✅ 聚合指标（FL vs 文档比、来源分布、bypass、slot 命中、L2 覆盖、耗时）：
 │              CLI `fl eval stats` / MCP facts_eval_stats → core/eval_cmd.py:compute_eval_stats
 │
-└── 🔴 5.3 结果层：注入式演习（故意塞已知矛盾/过期，测检出召回率与延迟）
-        philosophy §6 列为"基本待建"——是"结果真的减少接地失败吗"这一层的空叶子。
+└── 🔴 5.3 结果层：FL 有没有效（"结果真的减少接地失败吗"）
+        philosophy §6 列为"基本待建"的空叶子。测量框架见 plans/2026-08-12-eval-effectiveness-measurement.md：
+        区分 观测(T2 读链路判 A/B/C) vs 因果(T3 消融)；四格地图 + 三堵墙(方差/干净对照/oracle)；
+        原"注入式演习"= 其中 T3a（构造有 oracle 的题、干净因果）。⚠ fl_ratio 只是相关，不得当有效性。
 ```
 
 ---
@@ -290,7 +292,7 @@ FL 对这条根需求的回答，就是把"可信"拆成**四个可被守卫、�
 | search 埋点/指标 | 5.1 可自证 | search 专项埋点 + by_slot_op 交叉表 / 空结果率 / search→get 转化率——**已实现** | ✅ 已实现 | commit b627f69 |
 | 真源指针字段 | 4.1 可溯源 | SlotMeta 无 source-of-record 字段（结构性缺失，非"占比低"） | 🔴 待实现 | 本文核实 |
 | 值失真对账 | 4.3 可溯源 | 源指纹已有，但 _check_value_mismatch 空壳、不覆盖人/agent 事实 | 🔴 半成品 | 本文核实 |
-| 注入式演习 | 5.3 可自证 | 结果层召回率/延迟测量未建 | 🔴 待建 | philosophy §6 |
+| 有效性测量（原"注入式演习"） | 5.3 可自证 | 结果层：观测(T2 读链路判A/B/C)+因果(T3a注入式/T3-turn配对消融)未建；长程整会话消融判不可测 | 🔴 待建（框架已定） | plans/2026-08-12 |
 | scan-integrity 回连 slot | 2.3 当前 | 源哈希只服务扫描增量，未回连 slot（→ 并入 FL-027） | 🟡 部分 | 本文新登记 |
 | FL-022 | 3.6 一致 | 并发底座：per-slot revision / compare-and-set / delta / 依赖冲突浮现（P0 地基） | 🔵 roadmap | plans/2026-07-06 |
 | delta 水位线 v1 | 2.4 当前 | 无状态水位线 delta export（解 export 反复污染）——**已实现** | ✅ 已实现 | commit 86de58c |
