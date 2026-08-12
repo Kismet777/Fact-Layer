@@ -64,3 +64,21 @@ slots:
       verified: '2026-07-23'
       reason: 纠正 dogfood 证据:'悬空边'实为重复slot(B-003);记入 audit 措辞不可照字面的教训;B-001/B-002
         已修
+  eval-effectiveness-scope:
+    value:
+      title: eval 有效性口径 = T2 观测 + T3-turn 局部因果
+      date: '2026-08-12'
+      status: active
+      summary: FL eval 程序里 FL 有效 定义为两项:T2 观测(FL 返回被正确采纳,非 B 白用、非 C 自维护)+ T3-turn
+        局部因果(在须现查 FL 的 turn 上,有 FL 让这一步更好)。明确不追 整体因果口径(拿掉 FL 
+        整体变差)——受方差墙/干净对照/oracle 三墙所限,在真实开放长程工作上判不可测,诚实留白。实施收敛为 T2 + 
+        T3a(注入式演习,受限因果)+ T3-turn。fl_ratio 只是活跃度相关,不得当有效性证据。细节见 
+        docs/plans/2026-08-12-eval-effectiveness-measurement.md
+      affected-slots: []
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: '2026-08-12'
+      verified: '2026-08-12'
+      reason: 本 session 讨论收敛:eval 有效性口径定为 T2/T3-turn,整体因果判不可测
