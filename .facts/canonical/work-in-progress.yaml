@@ -4,13 +4,11 @@ tier: working
 
 slots:
   focus:
-    value: "eval-L3 结果层 S0+S1(T2 观测)已实现(分支 feat/eval-l3-results-layer,从 main 6c94fb0
-      开;未合并未推,待验收)。新增 models/eval_results.py(EvidenceBundle/ABCJudgement/T2Report/make_event_id)+
-      core/eval_t2.py(证据抽取 extract_evidence/LLM 判 A/B/C judge_evidence·judge_all/幂等缓存
-      save_verdict·load_verdict_cache→.facts/eval/results/t2_verdicts.jsonl/聚合 compute_t2_report/编排
-      run_effectiveness)+ CLI `fl eval effectiveness` + MCP facts_eval_effectiveness(T1
-      计数与 T2 采纳率分栏)。sealed-TDD,LLM 全 stub。测试 501→547 passed;fl check 0 errors。仅做 S0+S1,S2(T3a)/S3(T3-turn)/S4
-      未实现。"                                                                                             # What you're working on right now
+    value: "eval-L3 结果层：S0+S1(T2 观测)已验收并合并 main(HEAD 474f191)——含 models/eval_results.py(EvidenceBundle/ABCJudgement/T2Report)+
+      core/eval_t2.py(extract_evidence/judge_evidence·judge_all/幂等缓存/compute_t2_report/run_effectiveness)+
+      CLI `fl eval effectiveness` + MCP facts_eval_effectiveness(T1 计数与 T2 采纳率分栏);sealed-TDD
+      547 passed;fl check 0 errors。eval ingest 跨项目路由修复分支(fl eval prune + 有效性框架 + docs
+      地图)亦已合并 main。S2(T3a 注入式演习)spec 已写(plans/2026-08-13-eval-l3-S2-t3a-impl-spec.md),经用户决定暂缓实现、入待办。"   # What you're working on right now
     meta:
       source: human
       confidence: high
@@ -18,19 +16,18 @@ slots:
       updated: "2026-08-13"
       verified: "2026-08-13"
 
-      reason: '2026-08-13 实现 eval-L3 S0+S1(T2 观测),待验收角色审收'
+      reason: '2026-08-13 S0+S1 验收通过并合并 main;S2 spec 写完入待办暂缓'
   next-steps:
     value:                   # Immediate next actions
-    - 验收 eval-L3 S0+S1(分支 feat/eval-l3-results-layer):对 spec 
-      docs/plans/2026-08-13-eval-l3-S0-S1-impl-spec.md §5 
-      验收清单逐条核；通过后合并/推送分支(等用户确认推送策略)
-    - 实现 eval-L3 S2(T3a 注入式演习:构造有 oracle 的题,干净受限因果)+ S3(T3-turn 
-      配对消融:须选关键事实不在上下文、须现查 FL 的 turn,±FL pairwise judge);框架 plans/2026-08-12,口径 
-      decisions.eval-effectiveness-scope
-    - 合并/推送旧分支 fix/eval-ingest-cross-project-routing(3 commit,含 eval 
-      路由修复+prune+有效性框架+docs 地图)到 main —— 等用户确认
+    - eval-L3 S2(T3a 注入式演习):spec 
+      已写(plans/2026-08-13-eval-l3-S2-t3a-impl-spec.md,全 T3a 一次交付/注入式隔离 FL 
+      只装本题事实/纯手工 authored 小题库/oracle 外部给定/无 FL 臂整个不可见/FL 只建评测不编排 
+      agent),暂缓——待用户择期派实现 agent,本规划角色负责验收
+    - eval-L3 S3(T3-turn 配对消融):须选关键事实不在上下文、须现查 FL 的 turn,±FL pairwise judge;框架 
+      plans/2026-08-12,口径 decisions.eval-effectiveness-scope;未开工
     - 治理触发:把 fl check 接进 commit pre-hook(governance-cadence 决策的兑现)
-    - FL-024a session-log + fl handoff / FL-028 bug-log:两 spec 待用户审;审后登记再 TDD
+    - FL-024a session-log + fl handoff / FL-028 bug-log:两 spec 待用户审;审后登记需求树缺口表再 
+      TDD
     - B-003 重复 slot 数据清理 + B-004 kebab 命名检查
     - philosophy 重写(docs/architecture-philosophy.md 未跟踪):区分已实现地面 vs 设计意图
     - FL 演进大件:FL-022 并发底座(P0)/FL-021 L2 facts_trace+L3 文档式真源(P1)/FL-024 
@@ -42,7 +39,7 @@ slots:
       updated: "2026-08-13"
       verified: "2026-08-13"
 
-      reason: '2026-08-13:eval-L3 T2(S0+S1)已实现待验收;近步收敛为验收+推进 S2/S3(T3a/T3-turn)'
+      reason: 'eval-two-arm-runner 决策已写入,移除该待记项'
   blockers:
     value:                   # What's blocking progress
     - 无硬阻塞。FL-024a(session-log/handoff)与 FL-028(bug-log)spec 
@@ -58,11 +55,18 @@ slots:
         session 改 next-steps/recent-changes 时漏改 blockers 所致,当场修(A类规则3不得搁置不一致)
   recent-changes:
     value:                   # Notable recent changes for agent context
-    - 2026-08-12 eval 线(分支 fix/eval-ingest-cross-project-routing,未合并):①核实并修 eval
-      ingest 跨项目误路由(transcript_ingest/codex_ingest 改按 session cwd 路由、去掉命令-cwd 
-      静默回退)+ 新增 fl eval prune,TDD 501 passed(440b11d)②诚实纠正:观测到的'跨项目 trace'其实全是 
-      cwd=贷后 会话做跨项目工作(非路由 bug),只清了 2 个真 jobcity 会话 7 turns③eval 有效性测量框架 
-      plans/2026-08-12 + 需求树§5.3 + 
+    - 2026-08-13 eval-L3 S0+S1(T2 观测)落地并合并 main(474f191):S0 
+      models/eval_results.py + S1 
+      core/eval_t2.py(extract_evidence/judge_evidence·judge_all/幂等缓存/compute_t2_report/run_effectiveness)+
+      CLI fl eval effectiveness + MCP facts_eval_effectiveness;sealed-TDD 
+      501→547 passed;红线(禁 regex 判定/证据含相邻 reasoning 跨度/幂等缓存/不碰读热路径/T1≠T2 
+      分栏/fl_return 留空)逐条验收通过。同轮把 eval 路由修复分支 
+      fix/eval-ingest-cross-project-routing 合并 main。写 S2/T3a spec 入待办暂缓。
+    - 2026-08-12 eval 线(分支 fix/eval-ingest-cross-project-routing,已于 2026-08-13 
+      合并 main):①核实并修 eval ingest 跨项目误路由(transcript_ingest/codex_ingest 改按 
+      session cwd 路由、去掉命令-cwd 静默回退)+ 新增 fl eval prune,TDD 501 
+      passed(440b11d)②诚实纠正:观测到的'跨项目 trace'其实全是 cwd=贷后 会话做跨项目工作(非路由 bug),只清了 2 个真
+      jobcity 会话 7 turns③eval 有效性测量框架 plans/2026-08-12 + 需求树§5.3 + 
       decisions.eval-effectiveness-scope(有效=T2/T3-turn,整体因果判不可测)④docs/README.md 
       文档地图(4b62c16)。教训:LLM audit 判词/路径启发式≠地面(transcript cwd),destructive 前必核结构层
     - 2026-07-23(4e3f0d5)B-001/002/003 TDD 实现(491 tests):B-001 fl check 
@@ -76,10 +80,11 @@ slots:
       source: human
       confidence: high
       status: active
-      updated: "2026-08-12"
-      verified: "2026-08-12"
+      updated: "2026-08-13"
+      verified: "2026-08-13"
 
-      reason: 2026-08-12 session 收尾:prepend 本 session eval 线成果,供下一 session 继承
+      reason: 2026-08-13 prepend S0+S1 落地+合并条目;把 08-12 eval 线条目的'(未合并)'更正为'(已合并 
+        main)'保持自洽
   known-issues:
     value:                   # Known bugs or debt items
     - 运行中的 fl-mcp 是旧进程:需重启才暴露本 session 前后新增的 MCP 

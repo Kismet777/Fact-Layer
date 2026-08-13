@@ -82,3 +82,20 @@ slots:
       updated: '2026-08-12'
       verified: '2026-08-12'
       reason: 本 session 讨论收敛:eval 有效性口径定为 T2/T3-turn,整体因果判不可测
+  eval-two-arm-runner:
+    value:
+      title: eval 两臂运行边界:FL 建评测、不编排 agent
+      date: '2026-08-13'
+      status: active
+      summary: T3a/T3-turn 的 ±FL 两臂,FL 只提供评测端代码与运行命令(题/oracle 规格、隔离 FL 注入、±FL 
+        上下文生成、答案回填、对 oracle 打分与成本核算),必要时人工手动触发实际 agent 运行;FL 不 shell out 
+        agent、不编排执行流。理由:本质是构建评测,不违背「管 state 不造 orchestrator」的演进主线。细节见 
+        docs/plans/2026-08-13-eval-l3-S2-t3a-impl-spec.md §1。
+      affected-slots: []
+    meta:
+      source: human
+      confidence: high
+      status: active
+      updated: '2026-08-13'
+      verified: '2026-08-13'
+      reason: 2026-08-13 用户拍板 S2 两臂运行模型;S2/T3a spec §1 引用此决策

@@ -48,6 +48,7 @@
 | [`plans/2026-07-17-session-log-and-handoff-view.md`](plans/2026-07-17-session-log-and-handoff-view.md) | session-log 兄弟结构 + handoff 投影视图（FL-024a） | 📄 spec 待审 |
 | [`plans/2026-08-12-eval-effectiveness-measurement.md`](plans/2026-08-12-eval-effectiveness-measurement.md) | eval 有效性测量结果层（充实需求树 §5.3） | 🟡 框架已定 · T2 观测(S0+S1)已落 · T3a/T3-turn 未 |
 | [`plans/2026-08-13-eval-l3-S0-S1-impl-spec.md`](plans/2026-08-13-eval-l3-S0-S1-impl-spec.md) | eval-L3 结果层 S0+S1(T2 观测) 实现 spec | 🟡 S0+S1 已实现 · S2/S3/S4 未 |
+| [`plans/2026-08-13-eval-l3-S2-t3a-impl-spec.md`](plans/2026-08-13-eval-l3-S2-t3a-impl-spec.md) | eval-L3 结果层 S2(T3a 注入式演习) 实现 spec | 📄 spec 已写 · 待实现（入待办，暂缓） |
 | [`plans/2026-07-14-session-handoff.md`](plans/2026-07-14-session-handoff.md) | session 交接稿(时间点) | 🗄️ 历史（进度真源已移至 FL `work-in-progress`） |
 | [`plans/2026-07-17-session-handoff.md`](plans/2026-07-17-session-handoff.md) | session 交接稿(时间点,接续 07-14) | 🗄️ 历史（同上） |
 | `architecture-philosophy.md` | 哲学（未跟踪、**待重写勿引**） | ⚠ 草稿,与代码有漂移,重写前勿作依据 |
@@ -72,7 +73,7 @@
 | FL-026 | MCP/CLI 建 slot 能力对等（`facts_add`） | plans/2026-07-13 | ✅ commit 3827683 |
 | FL-027 | 内外完整性对账（缺失 + 失真统一） | plans/2026-07-16 | 🔴 待实现 |
 | FL-028 | bug-log 缺陷知识层 | plans/2026-07-17-bug-log | 📄 spec 待审 |
-| eval-L3 | eval 有效性测量结果层（T2 观测 + T3a/T3-turn 因果） | plans/2026-08-12 · S0/S1 spec 2026-08-13 | 🟡 T2 观测(S0 `models/eval_results.py` + S1 `core/eval_t2.py`)已落 · T3a/T3-turn(S2/S3) 未 |
+| eval-L3 | eval 有效性测量结果层（T2 观测 + T3a/T3-turn 因果） | plans/2026-08-12 · S0/S1 spec 2026-08-13 · S2/T3a spec 2026-08-13 | 🟡 T2 观测(S0 `models/eval_results.py` + S1 `core/eval_t2.py`)已落 · T3a(S2) spec 已写待实现 · T3-turn(S3) 未 |
 
 **B 类缺陷修复（TDD 落地）:**
 
