@@ -339,6 +339,38 @@ def facts_eval_access_stats() -> dict:
 
 
 @mcp.tool()
+def facts_eval_effectiveness(
+    session: str | None = None,
+    after: str | None = None,
+    sample: int | None = None,
+    dry_run: bool = False,
+) -> dict:
+    """T2 observation: LLM replays real chains and rates each FL read A/B/C.
+
+    Produces the *adoption rate* (A/(A+B)) — the observational effectiveness of FL,
+    distinct from `facts_eval_stats` T1 counts (which only say how often FL was
+    touched, NOT whether it helped). Returns both, in separate keys, so counts are
+    never mistaken for the adoption rate.
+
+    Args:
+        session: Filter traces by session ID (supports wildcards).
+        after: Only include traces after this date (YYYY-MM-DD).
+        sample: Judge a random sample of N reads (default: all).
+        dry_run: Extract evidence only, no LLM call (cost preview).
+
+    Returns:
+        {dry_run, total_reads, t1: {...relevance counts...}, t2: T2Report|None}.
+    """
+    facts_dir = _require_facts_dir()
+
+    from fact_layer.core.eval_t2 import run_effectiveness
+
+    return run_effectiveness(
+        facts_dir, session=session, after=after, sample=sample, dry_run=dry_run
+    )
+
+
+@mcp.tool()
 def facts_set(slot: str, value: str | int | float | bool | list | dict, reason: str | None = None) -> dict:
     """Set a single slot's value with automatic consistency check.
 

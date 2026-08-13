@@ -1454,6 +1454,104 @@ def access_stats(
         console.print(f"  调用 {result.search_total} 次 · 空结果率 {empty_pct} · search→get 转化 {conv_pct}")
 
 
+@eval_app.command()
+def effectiveness(
+    session: Annotated[
+        Optional[str],
+        typer.Option("--session", "-s", help="Filter traces by session (supports wildcards)"),
+    ] = None,
+    after: Annotated[
+        Optional[str],
+        typer.Option("--after", help="Only include traces after this date (YYYY-MM-DD)"),
+    ] = None,
+    sample: Annotated[
+        Optional[int],
+        typer.Option("--sample", help="Judge a random sample of N reads (default: all)"),
+    ] = None,
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Extract evidence only; no LLM call (cost preview)"),
+    ] = False,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Output as JSON"),
+    ] = False,
+) -> None:
+    """T2 观测：LLM 回看真实链路，把每次 FL 读判 A/B/C，产出事实采纳率。
+
+    区别于 `fl eval stats`（T1 相关计数）：本命令给的是**观测有效性**（A/(A+B)），
+    不是"FL 被碰了多少次"。两区分栏呈现，勿把 T1 计数当采纳率。
+    """
+    import json as json_mod
+
+    from fact_layer.core.eval_t2 import run_effectiveness
+    from fact_layer.core.registry import resolve_facts_dir
+
+    facts_dir = resolve_facts_dir()
+    if not facts_dir:
+        console.print("[red]No .facts/ directory found. Run 'fl init' first.[/red]")
+        raise typer.Exit(1)
+
+    out = run_effectiveness(
+        facts_dir, session=session, after=after, sample=sample, dry_run=dry_run
+    )
+
+    if json_output:
+        print(json_mod.dumps(out, indent=2, ensure_ascii=False))
+        raise typer.Exit(0)
+
+    t1 = out.get("t1") or {}
+    console.print("[bold]T1 相关计数（仅相关，非有效性）[/bold]")
+    console.print("───────────────────────────────────")
+    fl_vs_doc = t1.get("fl_vs_doc", {})
+    fl_ratio = t1.get("fl_ratio")
+    console.print(
+        f"  FL/文档来源:  fl={fl_vs_doc.get('fl', 0)} doc={fl_vs_doc.get('doc', 0)}"
+        f"  fl_ratio={'%.0f%%' % (fl_ratio * 100) if fl_ratio is not None else '—'}"
+    )
+    console.print(f"  FL 读事件（本次抽取）: {out.get('total_reads', 0)}")
+    console.print("  [dim]↑ 计数=FL 被碰了多少次，不能当采纳率/有效性[/dim]")
+
+    console.print()
+
+    if dry_run:
+        console.print("[bold]T2 观测（dry-run，未调 LLM）[/bold]")
+        console.print("───────────────────────────────────")
+        console.print(f"  待判 FL 读事件: {out.get('total_reads', 0)}")
+        console.print(f"  证据 reasoning 规模: {out.get('evidence_chars', 0)} 字符")
+        console.print("  [dim]去掉 --dry-run 以调用 LLM 判 A/B/C[/dim]")
+        raise typer.Exit(0)
+
+    t2 = out.get("t2") or {}
+    bv = t2.get("by_verdict", {})
+    adoption = t2.get("adoption_rate")
+    c_rate = t2.get("c_rate")
+    console.print("[bold]T2 观测（采纳率 = A/(A+B)，C 与 unknown 剔除）[/bold]")
+    console.print("───────────────────────────────────")
+    console.print(
+        f"  已判/总读: {t2.get('judged', 0)}/{t2.get('total_reads', 0)}"
+        f"  (coverage {'%.0f%%' % (t2.get('coverage', 0) * 100)})"
+    )
+    console.print(
+        f"  A 消费并有用: {bv.get('A', 0)}  ·  B 消费但白用: {bv.get('B', 0)}"
+        f"  ·  C 自维护: {bv.get('C', 0)}  ·  unknown: {bv.get('unknown', 0)}"
+    )
+    console.print(
+        f"  [bold]采纳率 (A/(A+B)): {'%.0f%%' % (adoption * 100) if adoption is not None else '—（分母为 0）'}[/bold]"
+        f"   ·  C 自维护占比: {'%.0f%%' % (c_rate * 100) if c_rate is not None else '—'}"
+    )
+
+    by_slot = t2.get("by_slot", {})
+    if by_slot:
+        console.print()
+        console.print("[bold]按 slot（A/B/C/unknown）:[/bold]")
+        for slot, counts in by_slot.items():
+            console.print(
+                f"  {slot:<32} A={counts.get('A', 0)} B={counts.get('B', 0)}"
+                f" C={counts.get('C', 0)} ?={counts.get('unknown', 0)}"
+            )
+
+
 @app.command()
 def audit(
     model: Annotated[
