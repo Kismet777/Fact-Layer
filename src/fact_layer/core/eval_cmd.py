@@ -22,19 +22,29 @@ def _sanitize_filename(s: str) -> str:
     return re.sub(r"[^\w\-]", "_", s)
 
 
+def trace_filename(trace: EvalTrace) -> str:
+    """The canonical on-disk filename for a trace (single source of the naming).
+
+    Deterministic from the trace's own fields, so evidence extraction can
+    reconstruct a ``trace_ref`` without carrying the path around.
+    """
+    ts_safe = trace.timestamp.replace(":", "-")
+    session_safe = _sanitize_filename(trace.session_id)
+    return f"{ts_safe}_{session_safe}_turn-{trace.turn:03d}.yaml"
+
+
 def save_trace(facts_dir: Path, trace: EvalTrace) -> Path:
     eval_dir = facts_dir / "eval"
     eval_dir.mkdir(parents=True, exist_ok=True)
 
-    ts_safe = trace.timestamp.replace(":", "-")
-    session_safe = _sanitize_filename(trace.session_id)
-    filename = f"{ts_safe}_{session_safe}_turn-{trace.turn:03d}.yaml"
+    filename = trace_filename(trace)
     out_path = eval_dir / filename
 
     dump_yaml(out_path, trace.model_dump(mode="json"))
 
     pending_dir = eval_dir / "pending"
     if pending_dir.is_dir():
+        session_safe = _sanitize_filename(trace.session_id)
         pattern = f"{session_safe}_turn-{trace.turn:03d}.*"
         for p in pending_dir.glob(pattern):
             p.unlink()
