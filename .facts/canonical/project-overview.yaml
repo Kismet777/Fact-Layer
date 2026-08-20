@@ -52,11 +52,11 @@ slots:
       updated: "2026-01-01"
       verified: "2026-01-01"
   scope:
-    value: Python CLI (typer) + MCP server, ~461 tests
+    value: Python CLI (typer) + MCP server, ~547 tests
     meta:
       source: human
       confidence: high
       status: active
-      updated: '2026-07-22'
-      verified: '2026-07-22'
-      reason: 治理响应#4:更新过期计数 ~370→~461(pytest --co 核实)
+      updated: '2026-08-20'
+      verified: '2026-08-20'
+      reason: 更新过期计数 ~461→~547(2026-08-13 S0+S1 合并后 pytest 核实,547 passed)

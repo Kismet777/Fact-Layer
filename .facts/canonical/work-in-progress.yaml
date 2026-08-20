@@ -19,27 +19,35 @@ slots:
       reason: '2026-08-13 S0+S1 验收通过并合并 main;S2 spec 写完入待办暂缓'
   next-steps:
     value:                   # Immediate next actions
-    - eval-L3 S2(T3a 注入式演习):spec 
-      已写(plans/2026-08-13-eval-l3-S2-t3a-impl-spec.md,全 T3a 一次交付/注入式隔离 FL 
-      只装本题事实/纯手工 authored 小题库/oracle 外部给定/无 FL 臂整个不可见/FL 只建评测不编排 
-      agent),暂缓——待用户择期派实现 agent,本规划角色负责验收
-    - eval-L3 S3(T3-turn 配对消融):须选关键事实不在上下文、须现查 FL 的 turn,±FL pairwise judge;框架 
-      plans/2026-08-12,口径 decisions.eval-effectiveness-scope;未开工
-    - 治理触发:把 fl check 接进 commit pre-hook(governance-cadence 决策的兑现)
+    - ★ FL 两层架构重构(用户下一步启动):设计输入 = 
+      docs/two-layer-architecture.md(北极星:稳定事实层=文档+schema+索引+git / 动态事实层=slot 网 /
+      决策是原因·事实是结果)+ FL-029 
+      输入控制(plans/2026-08-19-fl-input-admission-principle);「可验证信任」已认领到 需求树§5可自证 +
+      eval-L3(见 two-layer §6.2),非空缺口
+    - eval-L3 T3a(注入式演习)= 最终项目验收步,暂缓;当前面向 T2 那批测试推进(T2 观测已上线 main);spec 
+      plans/2026-08-13-eval-l3-S2-t3a-impl-spec.md
+    - eval-L3 S3(T3-turn 配对消融):同属验收阶段,未开工;框架 plans/2026-08-12,口径 
+      decisions.eval-effectiveness-scope
+    - 治理触发:把 fl check 接进 commit pre-hook(governance-cadence 决策的兑现;也是输入控制 FL-029 
+      的下游闭环承重项)
+    - 数据清理(B-003 关联,建议并入重构一并处理):重复/孤儿 slot 待并——testing.coverage-target vs 
+      coverage_target(值 461/376 均过期、实际 547 
+      且语义错置=测试数塞进覆盖率目标槽)、tech-stack.package-manager(空) vs package_manager;迁值 + 
+      deprecate 冗余
     - FL-024a session-log + fl handoff / FL-028 bug-log:两 spec 待用户审;审后登记需求树缺口表再 
       TDD
-    - B-003 重复 slot 数据清理 + B-004 kebab 命名检查
     - philosophy 重写(docs/architecture-philosophy.md 未跟踪):区分已实现地面 vs 设计意图
-    - FL 演进大件:FL-022 并发底座(P0)/FL-021 L2 facts_trace+L3 文档式真源(P1)/FL-024 
-      角色记忆/FL-023 warden/FL-025 类别生命周期/FL-027 完整性对账/冷热分层
+    - FL 演进大件(多数将并入两层重构):FL-022 并发底座 / FL-021 L2 facts_trace + L3 文档式真源 / FL-024
+      角色记忆 / FL-023 warden / FL-025 类别生命周期 / FL-027 完整性对账 / 冷热分层
     meta:
       source: human
       confidence: high
       status: active
-      updated: "2026-08-13"
-      verified: "2026-08-13"
+      updated: "2026-08-20"
+      verified: "2026-08-20"
 
-      reason: 'eval-two-arm-runner 决策已写入,移除该待记项'
+      reason: '2026-08-20 整理:加''下一步=FL 两层架构重构''为首项;T3a 改标为最终验收步(面向 T2 推进);把重复 slot
+        清理并入待办,建议随重构处理'
   blockers:
     value:                   # What's blocking progress
     - 无硬阻塞。FL-024a(session-log/handoff)与 FL-028(bug-log)spec 
